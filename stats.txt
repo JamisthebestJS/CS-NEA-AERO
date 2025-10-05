@@ -1,0 +1,1 @@
+aerofoil_count = 0
