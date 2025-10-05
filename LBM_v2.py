@@ -88,7 +88,7 @@ being done in point_drawing, saved as a True/False field, and then loaded here a
 
 """
 
-MAX_HORIZONTAL_INFLOW_VEL = 0.04
+MAX_HORIZONTAL_INFLOW_VEL = 500
 
 PLOT_N_STEPS = 25
 SKIP_FIRST_N_STEPS = 0
@@ -113,6 +113,8 @@ TOP_VELS = np.array([2, 5, 6])
 BOTTOM_VELS = np.array([4, 7, 8])
 VERTICAL_VELS = np.array([0, 2, 4])
 HORIZONTAL_VELS = np.array([0, 1, 3])
+
+global density
 
 
 class Helpers(staticmethod):
@@ -192,10 +194,10 @@ def render(density, screen):
     ob_mask = []
     #each sim square is a 2x2 rendered square.
     #each square, if not boundary, is rendered as a colour depending on density of the square
-    
+    count = 0
     for i in range(len(density)):
         for j in range(len(density[i])):
-            
+            count+=1
             local_dens = density[i, j]
             if local_dens > 0:
                 #want to know the percentage out of some max value and then multiply the percentage by 255 for the colour shade
@@ -205,10 +207,11 @@ def render(density, screen):
                 pygame.draw.rect(screen, (255*multiplier, 0, 0), pygame.Rect(i*SCREEN_COEF, j*SCREEN_COEF, 2, 2))
 
             
-            elif ob_mask[i ,j] == True: #if aerofoil:
-                pygame.draw.rect(screen, (255,255,255), pygame.Rect(i*SCREEN_COEF, j*SCREEN_COEF, 2, 2))
+            #elif ob_mask[i][j] == True: #if aerofoil:
+                #pygame.draw.rect(screen, (255,255,255), pygame.Rect(i*SCREEN_COEF, j*SCREEN_COEF, 2, 2))
 
-    print("rendered frame")
+    pygame.display.update()
+    pygame.time.delay(2000)
 
 
 def update():
@@ -223,7 +226,6 @@ def update():
 
     # 3. Apply inflow stuff by Zou/He  (Dirichlet BC)
     macro_vels_prev[0, 1:-1, :] = velocity_profile[0, 1:-1, :] #at all points but very top and very bottom
-    density_prev[0, :] = 10
     
     
     #maths according to Zou/He
@@ -258,9 +260,8 @@ def update():
             LATTICE_VELS[1, i], axis = 0
             )
     
-    print("update")
     return discrete_vels_streamed
-    
+
 
 def LBM_main():
     #SETUP
@@ -283,7 +284,8 @@ def LBM_main():
     discrete_vels_prev = Helpers.get_equilibrium_velocities(velocity_profile, np.ones((N_POINTS_X, N_POINTS_Y)))
     
     print("finished setup")
-    
+    return True
+
 
 
 def LBM_main_loop(screen):
@@ -295,7 +297,7 @@ def LBM_main_loop(screen):
     discrete_vels_prev = discrete_vels_next
     density = Helpers.get_density(discrete_vels_next)
     render(density, screen)
-    
+
 
 """
 #TODO:

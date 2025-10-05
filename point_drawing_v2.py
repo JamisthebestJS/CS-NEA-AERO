@@ -10,7 +10,7 @@ SCREEN_SIZE = 700
 #pythag shows cat_rom_def should be sqrt(2)*side_length which is what is done below
 CAT_ROM_DEF =  int(1.41*(SCREEN_SIZE))#number of points between each pair of vertices in catmull rom spline (wants to be num of pixels diagonally)
 
-SIM_HEIGHT = 100
+SIM_HEIGHT = 300
 MAX_VERTEX_COUNT = 30
 
 
@@ -124,14 +124,12 @@ class Modes(staticmethod):
         #need to then update lines
     
     @staticmethod
-    def move_vertex(start_pos, dx, dy):
-        vert_id = VertexListOperations.get_vertex_ID(start_pos[0], start_pos[1])
+    def move_vertex(vert_id, dx, dy):
         vertex = VertexListOperations.get_vertex(vert_id)
-        old_pos = vertex.get_pos()
-        new_pos = (old_pos[0] + dx, old_pos[1] + dy)
-        print(f"Moving vertex at {old_pos} by ({dx}, {dy}) to ({new_pos})")
+        start_pos = vertex.get_pos()
+        new_pos = (start_pos[0] + dx, start_pos[1] + dy)
         vertex.update_pos(new_pos[0], new_pos[1])
-        CatmullRom.move_points(old_pos, new_pos)
+        CatmullRom.move_points(start_pos, new_pos)
     
     
     @staticmethod
@@ -140,10 +138,7 @@ class Modes(staticmethod):
         Should maybe change this a little so it calls a Helper method which does the masking stuff. 
         And then maybe another method from elsewhere which renders the save menu etc. bc the other Modes methods are quite small and more or less just call other functions.
         
-        
         """
-        
-        
         
         #why make rendered aerofoil smaller? its like I'm applyin the scalar multiplication to the wrong version of path, but I'm most assuredly not?
         
@@ -200,20 +195,93 @@ class Modes(staticmethod):
         vert_mask = np.zeros((SIM_HEIGHT, SIM_HEIGHT))
         hori_mask = np.zeros((SIM_HEIGHT, SIM_HEIGHT))
         
+        #iterate through each sublist.
+        #do some algo for swapping to 1s in each mask
+        #if odd number, ignore for now
+        #if even number, for each one, swap, starting at false for 0, going to false for 2.
+        #this could do with being explained in NEA with some pseudocode or something like that
+        
+        
+        #for each column which contains some aerofoil
+        for sublist in vert_sublist:
+            #if odd number of aero nodes, ignore (temporarily)
+            if len(sublist) % 2 != 0:
+                continue
+            else: 
+                #even number of points in that column
+                swaps = False
+                y_start = 0
+                #for each node in the sublist
+                for node in sublist:
+                    #make True btwn the first and second, False btwn second and third, etc... in the vertical mask
+                    y_end = node[1]
+                    vert_mask[node[0], y_start:y_end] = swaps
+                    y_start = y_end
+                    #swaps beween True and False each time a node is reached
+                    swaps = (True if (swaps == False) else False)
+        
+        for sublist in hori_sublist:
+            #if odd number of aero nodes, ignore (temporarily)
+            if len(sublist) % 2 != 0:
+                continue
+            else: 
+                #even number of points in that column
+                swaps = False
+                x_start = 0
+                #for each node in the sublist
+                for node in sublist:
+                    #make True btwn the first and second, False btwn second and third, etc... in the vertical mask
+                    x_end = node[0]
+                    vert_mask[x_start:x_end, node[1]] = swaps
+                    x_start = x_end
+                    #swaps beween True and False each time a node is reached
+                    swaps = (True if (swaps == False) else False)
+
+        
+        
+        #AND the masks (a&b is aANDb)
+        object_mask = np.array
+        object_mask = np.logical_and(hori_mask,vert_mask)
+        
+        #temporary
+        object_mask = hori_mask
         
         #open stats file (to see how many aerofoils exist)
         stats_file = open("stats.txt", "r")
         stats_content = []
+        all_content = []
+        
         for line in stats_file:
             #remove non-number characters, then append the remaining number to stats_content
             result = ''.join([char for char in line if char.isdigit()])
             stats_content.append(result)
-        
-
+            print(result)
+            all_content.append(line)
         aerofoil_count = stats_content[0]
-        new_aerofoil_count = aerofoil_count + 1 #keeps a record of how many aerofoils so has a default name for the aerofoils as they are saved.
+        stats_file.close()
+        
+        new_aerofoil_count = str(int(aerofoil_count) + 1) #keeps a record of how many aerofoils so has a default name for the aerofoils as they are saved.
+        #writes new aerofoil count into the file
+        all_content[0] = "aerofoil_count = " + str(new_aerofoil_count)
+        with open("stats.txt", "w") as file:
+            for line in all_content:
+                file.write(line)
+                
+        
+        name = None
+        #creating the file which stores the object mask
+        if name == None:
+            name = f"aerofoil {new_aerofoil_count}"
         
         
+        with open(f"Aerofoils\{name}.txt", "w") as file:
+            for line in object_mask:
+                for node in line:
+                    file.write(str(node))
+                print("\n")
+        file.close()
+            
+            
         
     @staticmethod
     def set_mode(new_mode):
@@ -383,13 +451,19 @@ class Aerofoil(object):
         pass
         #adds button to menu when/after saving an aerofoil
     
-
+#mouse dragging vars:
+dragging = False
+drag_start_pos = None
+drag_end_pos = None
+dragged_vertex_ID = None
 
 def p_main(screen, event):
-
-
+    global dragging, drag_start_pos, drag_end_pos, dragged_vertex_ID
+    #so can quit while drawing
+    running = True
     if event.type == pygame.QUIT:
         running = False
+        pygame.quit()
     
     #CHANGING MODES
     if event.type == pygame.KEYDOWN:
@@ -407,10 +481,12 @@ def p_main(screen, event):
             
             print(f"Mode set to {Modes.get_mode()}")
     
+    
+    
+
+    
     #IF MOUSE CLICK
-    if event.type == pygame.MOUSEBUTTONDOWN:
-        
-        if event.button == 1:
+    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             # Mouse button 1 (left click) has been pressed
             mouse_x, mouse_y = Toolbox.snap_to_grid(pygame.mouse.get_pos(), SCREEN_SIZE)
             print(f"Left click at ({mouse_x}, {mouse_y})")
@@ -424,25 +500,24 @@ def p_main(screen, event):
                 MODE_DICT[mode]()
     
     
-    # Track mouse drag: store position on press, compare on release
+        # Track mouse drag: store position on press, compare on release
+            if Modes.get_mode() == "move":
+                dragged_vertex_ID = VertexListOperations.get_vertex_ID(mouse_x, mouse_y)
+                if dragged_vertex_ID != -1:
+                    drag_start_pos = event.pos
+                    dragging = True
+        
+    #IF MOUSE RELEASE
     #dy, dx fed into Modes.move_vert
-    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-        if Modes.get_mode() == "move":
-            dragged_vertex_ID = VertexListOperations.get_vertex_ID(mouse_x, mouse_y)
-            if dragged_vertex_ID != -1:
-                drag_start_pos = pygame.mouse.get_pos()
-                dragging = True
-    
-    
-    if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-        if 'drag_start_pos' in locals() and dragging:
+    elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+        if dragging:
             drag_end_pos = pygame.mouse.get_pos()
             dx = drag_end_pos[0] - drag_start_pos[0]
             dy = drag_end_pos[1] - drag_start_pos[1]
             
-            if (dx != 0 or dy != 0) and dragged_vertex_ID != -1: #if vertex has been moved
-                print(f"Cursor dragged from {drag_start_pos} to {drag_end_pos}, delta: ({dx}, {dy})")
-                Modes.move_vertex(drag_start_pos, dx, dy)
+            if dx+dy != 0 and dragged_vertex_ID != -1: #if vertex has been moved
+                print(f"vertex {dragged_vertex_ID} dragged from {drag_start_pos} to {drag_end_pos}, delta: ({dx}, {dy})")
+                Modes.move_vertex(dragged_vertex_ID, dx, dy)
                 
             dragged_vertex_ID = 0
             dragging = False
@@ -452,6 +527,7 @@ def p_main(screen, event):
     VertexListOperations.render_all_vertices(screen)
     pygame.display.flip()
 
+    return running
 
 
 """
@@ -467,37 +543,24 @@ TODO:
 - dont allow to place a vertex on top of another vertex (or too close)
 
 
-
 ERRORS (causes crash):
 -
 
 
 BUG:
 - saving the aerofoil for some reason visually shrinks it to simualation size, which shouldnt happen
-    I am really lost as to why. Does NOT seem like it should?
-
-- move no work >:( AAHAHAHAHHHHHHHHHHHHHHHHHHHHHHHHHHH
+    I am really lost as to why. Does NOT seem like it should
 
 
 DONE (since last git push):
 
 added:
-- catmull rom spline drawing
-- point moving
-- point deleting
+-
+
 
 fixed:
-- deleting vertices doesnt change catmullrom path
-- adding new vertices after deleting some causes the new vertices to be undeletable
-- clicking on a vertex which has been deleted (but is still rendering) deletes a vertex not clicked on (in catmull rom path, not sure if its still in VertexListOperations.vertices)
-- vertices only stop rendering after you click on a vertex for the second time (which causes an error in VertexListOperations.get_vertex because the index is out of range (although no crash))
-- if you try to delete a vertex and dont exactly click on it, it crashes as it cannot find the position in CatmullRom.points. Need to ensure that CatmullRom.points stores same pos as VertexListOperations.vertices
-- if you try to delete the only vertex, it crashes. (index out of range in catmullrompath)
-- Not clicking exactly on a vertex when trynig to move it causes it to not be updated in catmullrom.points
-- moving a vertex doesnt change catmullrom path (even if it changes in catmullrom.points). (seems to not change catmullrom.points even though a print statement shows it gets to that point)
-- moving a vertex moves the position from its original position to where you clicked rather than where you dragged it to? (in catmullrom.points)
-- moving a point doesnt always trigger an update of catmullrom.points
-
+- move no work >:(
+- when move vertex, line doesnt update
 
 removed:
 - 
