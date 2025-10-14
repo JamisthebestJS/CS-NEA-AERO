@@ -1,7 +1,7 @@
 import pygame
 from enum import Enum, auto
 import numpy as np
-
+from helpers.introsort import introsort
 
 
 
@@ -177,19 +177,11 @@ class Modes(staticmethod):
                 
         #now we need to sort the sublists in terms of the changing element, ASC
         #note this doesnt work if shape is tooo small (like a couple pixels or smt idrk)
+        #also bit of an issue as its trying to sort 2-el arrays. For quick and insertion its simple enough but really unsure about heap sort
         for i in vert_sublist:
-            Toolbox.heap_sort(vert_sublist[:][0])
-        
+            introsort(i, 1)
         for i in hori_sublist:
-            Toolbox.heap_sort(vert_sublist[:][1])
-        
-        """
-        WORKING HERE____
-        
-        little issue is complexity maybe? I'm not 100% my program is complicated enough
-        I DO STILL NEED TO FILL THE AEROFOIL FOR RENDERING REASONS
-        
-        """
+            introsort(i, 1)
         
         #create seperate True/False masks for hori and vert (between 2 most extreme of each sublist)
         #AND the masks (to ensure any weird wave-like aerofoil shapes are correctly masked)
@@ -210,7 +202,7 @@ class Modes(staticmethod):
                 continue
             else: 
                 #even number of points in that column
-                swaps = False
+                swaps = 0
                 y_start = 0
                 #for each node in the sublist
                 for node in sublist:
@@ -218,25 +210,26 @@ class Modes(staticmethod):
                     y_end = node[1]
                     vert_mask[node[0], y_start:y_end] = swaps
                     y_start = y_end
-                    swaps = (True if (swaps == False) else False)
+                    swaps = (1 if (swaps == 0) else 0)
         
         #something going wrong here or in hori_sublist stuff
         for sublist in hori_sublist:
+            print(f"sublist {sublist}")
             #if odd number of aero nodes, ignore (temporarily)
             if len(sublist) % 2 != 0:
                 continue
             else: 
                 #even number of points in that column
-                swaps = False
+                swaps = 0
                 x_start = 0
                 #for each node in the sublist
                 for node in sublist:
                     #make True btwn the first and second, False btwn second and third, etc... in the vertical mask
                     x_end = node[0]
-                    vert_mask[x_start:x_end, node[1]] = swaps
+                    hori_mask[x_start:x_end, node[1]] = swaps
                     x_start = x_end
-                    swaps = (True if (swaps == False) else False)
-                
+                    swaps = (1 if (swaps == 0) else 1)
+
         
 
         
@@ -246,6 +239,10 @@ class Modes(staticmethod):
         #AND the masks and save to file      
         object_mask = np.array
         object_mask = np.logical_and(hori_mask,vert_mask)
+        for i in object_mask:
+            for j in i:
+                if j == 1:
+                    print("true")
         Toolbox.aerofoil_save_to_file(object_mask)  
             
         
@@ -344,33 +341,6 @@ class Toolbox(staticmethod):
         snapped_x = round(coord[0])
         snapped_y = round(coord[1])
         return snapped_x, snapped_y
-    
-    @staticmethod
-    def heap_sort(array):
-        n = len(array)
-
-        for i in range(n // 2, -1, -1):
-            Toolbox.heapify(array, n, i)
-
-        for i in range(n - 1, 0, -1):
-            (array[i], array[0]) = (array[0], array[i])  # swap
-            Toolbox.heapify(array, i, 0)
-
-    @staticmethod
-    def heapify(array, n, i):
-        largest = i 
-        l = 2 * i + 1
-        r = 2 * i + 2
-
-        if l < n and array[i] < array[l]:
-            largest = l
-
-        if r < n and array[largest] < array[r]:
-            largest = r
-
-        if largest != i:
-            (array[i], array[largest]) = (array[largest], array[i])  # swap
-            Toolbox.heapify(array, n, largest)
             
     @staticmethod
     def aerofoil_save_to_file(ob_mask):

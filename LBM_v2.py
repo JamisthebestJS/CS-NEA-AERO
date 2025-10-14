@@ -63,7 +63,6 @@ Note that this scheme can become unstable for Reynoldsnumbers >~ 350 ²
 
 import pygame
 import numpy as np
-import jax.numpy
 
 global count
 count = 0
