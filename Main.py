@@ -87,8 +87,6 @@ if __name__ == "__main__":
 
 
 BUGS:
-- for some reason, no window opens before choosing a thing
-- window isnt properly working (cant click on it to make it come to front) when choosing sim
 - exiting simulation to main menu doesnt work
 
 
@@ -101,12 +99,13 @@ ERRORS:
 DONE#:
 
 IMPROVED:
-- code cleaness for main loop/menu
+- 
 
 
 FIXED:
-- drawing doesnt work. Not noticing key inputs (any?)
-- something is rendered during sim, but its flickery and stuff
+-
+
+
 
 
 """

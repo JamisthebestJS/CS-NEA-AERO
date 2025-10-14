@@ -158,7 +158,8 @@ class Modes(staticmethod):
             if key not in seen_keys:
                 seen_keys.add(key)
                 new.append(sublist)
-                
+        
+        #here the save_path is a list of unique coordinates that fuly defines the boundary of the aerofoil
         save_path = new
         
         #make a list of sublists with all points with the same x pos, and a list of sublists with points w same y pos
@@ -169,13 +170,13 @@ class Modes(staticmethod):
             vert_sublist[save_path[i][0]].append(save_path[i])
             hori_sublist[save_path[i][1]].append(save_path[i])
         
-        # remove sempty sublists
+        # remove empty sublists
         vert_sublist = [sublist for sublist in vert_sublist if sublist]
         hori_sublist = [sublist for sublist in hori_sublist if sublist]
         
                 
         #now we need to sort the sublists in terms of the changing element, ASC
-        #note this doesnt work if shape is too small (like a couple pixels or smt idrk)
+        #note this doesnt work if shape is tooo small (like a couple pixels or smt idrk)
         for i in vert_sublist:
             Toolbox.heap_sort(vert_sublist[:][0])
         
@@ -217,9 +218,9 @@ class Modes(staticmethod):
                     y_end = node[1]
                     vert_mask[node[0], y_start:y_end] = swaps
                     y_start = y_end
-                    #swaps beween True and False each time a node is reached
                     swaps = (True if (swaps == False) else False)
         
+        #something going wrong here or in hori_sublist stuff
         for sublist in hori_sublist:
             #if odd number of aero nodes, ignore (temporarily)
             if len(sublist) % 2 != 0:
@@ -234,53 +235,18 @@ class Modes(staticmethod):
                     x_end = node[0]
                     vert_mask[x_start:x_end, node[1]] = swaps
                     x_start = x_end
-                    #swaps beween True and False each time a node is reached
                     swaps = (True if (swaps == False) else False)
-
-        
-        
-        #AND the masks (a&b is aANDb)
-        object_mask = np.array
-        object_mask = np.logical_and(hori_mask,vert_mask)
-        
-        #temporary
-        object_mask = hori_mask
-        
-        #open stats file (to see how many aerofoils exist)
-        stats_file = open("stats.txt", "r")
-        stats_content = []
-        all_content = []
-        
-        for line in stats_file:
-            #remove non-number characters, then append the remaining number to stats_content
-            result = ''.join([char for char in line if char.isdigit()])
-            stats_content.append(result)
-            print(result)
-            all_content.append(line)
-        aerofoil_count = stats_content[0]
-        stats_file.close()
-        
-        new_aerofoil_count = str(int(aerofoil_count) + 1) #keeps a record of how many aerofoils so has a default name for the aerofoils as they are saved.
-        #writes new aerofoil count into the file
-        all_content[0] = "aerofoil_count = " + str(new_aerofoil_count)
-        with open("stats.txt", "w") as file:
-            for line in all_content:
-                file.write(line)
                 
         
-        name = None
-        #creating the file which stores the object mask
-        if name == None:
-            name = f"aerofoil {new_aerofoil_count}"
+
+        
+        #HORI_MASK IS ALL FALSE
         
         
-        with open(f"Aerofoils\{name}.txt", "w") as file:
-            for line in object_mask:
-                for node in line:
-                    file.write(str(node))
-                print("\n")
-        file.close()
-            
+        #AND the masks and save to file      
+        object_mask = np.array
+        object_mask = np.logical_and(hori_mask,vert_mask)
+        Toolbox.aerofoil_save_to_file(object_mask)  
             
         
     @staticmethod
@@ -350,7 +316,6 @@ class VertexListOperations(object):
             
             vertex = VertexListOperations.get_vertex(id)
             if vertex == None:
-                print("Vertex not found in VertexListOperations.get_vertex")
                 return
             
             print(f"deleting vertex {id} at ({x}, {y}) from VertexListOperations.vertices")
@@ -406,6 +371,40 @@ class Toolbox(staticmethod):
         if largest != i:
             (array[i], array[largest]) = (array[largest], array[i])  # swap
             Toolbox.heapify(array, n, largest)
+            
+    @staticmethod
+    def aerofoil_save_to_file(ob_mask):
+        #open stats file (to see how many aerofoils exist)
+        stats_file = open("stats.txt", "r")
+        stats_content = []
+        all_content = []
+        
+        for line in stats_file:
+            #remove non-number characters, then append the remaining number to stats_content
+            result = ''.join([char for char in line if char.isdigit()])
+            stats_content.append(result)
+            all_content.append(line)
+        aerofoil_count = stats_content[0]
+        stats_file.close()
+        
+        new_aerofoil_count = str(int(aerofoil_count) + 1) #keeps a record of how many aerofoils so has a default name for the aerofoils as they are saved.
+        #writes new aerofoil count into the file
+        all_content[0] = "aerofoil_count = " + str(new_aerofoil_count)
+        with open("stats.txt", "w") as file:
+            for line in all_content:
+                file.write(line)
+                
+        name = None
+        #creating the file which stores the object mask
+        if name == None:
+            name = f"aerofoil {new_aerofoil_count}"
+        
+        with open(f"Aerofoils\{name}.txt", "w") as file:
+            for line in ob_mask:
+                for node in line:
+                    file.write(str(node))
+                file.write("\n")
+        file.close()
     
 #Vertex class
 #may need to split into stuff about the list (static) and actual vertices (nonstatic)
@@ -468,6 +467,8 @@ def p_main(screen, event):
     #CHANGING MODES
     if event.type == pygame.KEYDOWN:
             #for testing, set modes with keyboard keys
+            
+            old_mode = Modes.get_mode()
             if event.key == pygame.K_n:
                 Modes.set_mode("new")
             elif event.key == pygame.K_d:
@@ -479,7 +480,9 @@ def p_main(screen, event):
             elif event.key == pygame.K_s:
                 Modes.set_mode("save")
             
-            print(f"Mode set to {Modes.get_mode()}")
+            #debug
+            if Modes.get_mode != old_mode:
+                print(f"Mode set to {Modes.get_mode()}")
     
     
     
@@ -536,10 +539,7 @@ TODO:
 
 
 - GUI stuff. Buttons for modes, maybe a sidebar for info
-- merge with aero simulator
-- make catmull rom path update only the parts that need updating, not the whole thing (maybe? not sure if worth the effort)
 (smaller things)
-- add limit for number of vertices
 - dont allow to place a vertex on top of another vertex (or too close)
 
 
@@ -549,7 +549,9 @@ ERRORS (causes crash):
 
 BUG:
 - saving the aerofoil for some reason visually shrinks it to simualation size, which shouldnt happen
-    I am really lost as to why. Does NOT seem like it should
+    I am really lost as to why. Does NOT seem like it
+
+- fix aerofoil mask generator
 
 
 DONE (since last git push):
@@ -559,8 +561,8 @@ added:
 
 
 fixed:
-- move no work >:(
-- when move vertex, line doesnt update
+-
+
 
 removed:
 - 

@@ -63,7 +63,7 @@ Note that this scheme can become unstable for Reynoldsnumbers >~ 350 ²
 
 import pygame
 import numpy as np
-
+import jax.numpy
 
 global count
 count = 0
@@ -188,7 +188,14 @@ class Helpers(staticmethod):
 
         return equilibrium_discrete_vels
 
+    @staticmethod
+    def load_aerofoil():
+        mask = []
+        with open("Aerofoils\\aerofoil 1.txt", "r")as file:
+            for line in file:
+                mask.append(line)
 
+        return mask
 
 def render(density, screen):
     ob_mask = []
@@ -216,7 +223,7 @@ def render(density, screen):
 
 def update():
     #temporary
-    ob_mask = []
+    ob_mask = Helpers.load_aerofoil() #I think this doesnt work quite right? requires a list of indices I think rather than True/False
     # 1. Apply outflow boundary condition on the right boundary
     discrete_vels_prev[-1, :, LEFT_VELS] = discrete_vels_prev[-2, :, LEFT_VELS] #(bounday stuff has same value as stuff one cell further left)
 
@@ -241,7 +248,7 @@ def update():
     # 5. BGK collisions
     # fᵢ ← fᵢ − ω (fᵢ − fᵢᵉ)
     discrete_vels_post_collision = discrete_vels_prev - relaxation_factor * (discrete_vels_prev - equilibrium_discrete_vels)
-    
+    ob_mask = []
     # 6. bounce-back (for no-slip on interior boundary)
     for i in range(N_DISCRETE_VELOCITIES):
         #basically, anything that is now inside the aerfoil is reversed so it "bounces back" from the boundary
@@ -273,7 +280,7 @@ def LBM_main():
     #def mesh
     x = np.arange(N_POINTS_X)
     y = np.arange(N_POINTS_Y)
-    X, Y = np.meshgrid(x, y, indexing='ij') #indexing makes differential operator more sensical
+    X, Y = np.meshgrid(x, y, indexing='ij')
     
     #velocity profile
     global velocity_profile
