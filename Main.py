@@ -34,7 +34,7 @@ def main_menu(event):
 def main(screen):
     choice = None
     running = True
-    setup = False
+    set_up = False
     iteration = 0
     while running:
         
@@ -49,17 +49,16 @@ def main(screen):
                 choice = main_menu(event)
             
             elif choice == "sim":
-                if setup == False:
+                if set_up == False:
                     screen = pygame.display.set_mode((SIM_WIDTH, SIM_HEIGHT))
-                    setup = LBM_setup()
-                    setup = True
+                    set_up = LBM_setup()
         
             elif choice == "draw":
                 running = p_main(screen, event)
     
 
         if choice == "sim":
-            if iteration < M_ITERATIONS and setup == True:
+            if iteration < M_ITERATIONS and set_up == True:
                 iteration+=1
                 LBM_main_loop(screen)
         

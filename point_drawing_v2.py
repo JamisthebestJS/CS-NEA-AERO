@@ -198,6 +198,11 @@ class Modes(staticmethod):
         #for each column which contains some aerofoil
         for sublist in vert_sublist:
             #if odd number of aero nodes, ignore (temporarily)
+            #one of the points needs to be ignored, if you think about it.
+            #Think about polynomial graphs. If odd number of solutions to f(x) = 0, one of the roots must be repeated (for order >1), and so must be stationary point
+            #stationary points shouldnt flip swaps
+            #so I need to know when its the local minimum/maximum then (st.pt.)
+            #How do I do that? On paper.
             if len(sublist) % 2 != 0:
                 continue
             else: 
@@ -211,6 +216,10 @@ class Modes(staticmethod):
                     vert_mask[node[0], y_start:y_end] = swaps
                     y_start = y_end
                     swaps = (True if (swaps == False) else False)
+                    
+                        
+
+                    
         
         #something going wrong here or in hori_sublist stuff
         for sublist in hori_sublist:
@@ -229,7 +238,7 @@ class Modes(staticmethod):
                     hori_mask[x_start:x_end, node[1]] = swaps
                     x_start = x_end
                     swaps = (True if (swaps == False) else True)
-
+                        
         
 
         
@@ -368,7 +377,10 @@ class Toolbox(staticmethod):
         with open(f"Aerofoils\{name}.txt", "w") as file:
             for line in ob_mask:
                 for node in line:
-                    file.write(str(node))
+                    if node == True:
+                        file.write(str(1))
+                    elif node == False: #can change to else if works
+                        file.write(str(0))
                 file.write("\n")
         file.close()
     

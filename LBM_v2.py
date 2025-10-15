@@ -75,12 +75,11 @@ REYNOLDS = 100
 N_POINTS_X = 600
 N_POINTS_Y = 300
 
-SCREEN_COEF = 4
 
-SCREEN_HEIGHT = N_POINTS_Y * SCREEN_COEF
-SCREEN_WIDTH = N_POINTS_X * SCREEN_COEF
+SCREEN_HEIGHT = N_POINTS_Y
+SCREEN_WIDTH = N_POINTS_X 
 
-MAX_RENDERED_VAL = 500
+MAX_RENDERED_VAL = 0.04
 
 """
 need to define inner boundary for aerofoil
@@ -188,7 +187,6 @@ class Helpers(staticmethod):
 
 def render(screen, vel_mag):
     global aerofoil
-    print("rendering sim")
     
     width, height = vel_mag.shape
     
@@ -201,7 +199,7 @@ def render(screen, vel_mag):
     if isinstance(aerofoil, (list, tuple)):
         for x, y in aerofoil:
             if 0 <= x < width and 0 <= y < height:
-                colours[x, y, :] = 255
+                colours = colours.at[x, y, :].set(255)
     
     elif isinstance(aerofoil, jnp.ndarray):
         mask = aerofoil.astype(bool)
@@ -262,7 +260,7 @@ def update(discrete_vels_prev):
     return discrete_vels_streamed
 
 
-def LBM_setup():
+def LBM_setup():    
     #SETUP
     kinematic_viscosity = (MAX_HORIZONTAL_INFLOW_VEL * 10) / REYNOLDS   #NOTE: 10 is radius, but an aerofoil doesnt have a radius, so not sure how that works
     
@@ -287,9 +285,8 @@ def LBM_setup():
     #need to get list of coords from this.
     for i in range(len(ob_mask)):
         for j in range(len(ob_mask[i])):
-            if ob_mask[i][j] == True: #part of aerofoil
-                aerofoil.append([i,j])
-                print("aero bit")
+            if ob_mask[i][j] == str(1): #part of aerofoil
+                aerofoil.append([i + SCREEN_WIDTH//8 , j])
     #i think ^^ not working: unrelated error showed that aerofoil in update loop was [] (i.e. empty which would be why no render)
     
     print("finished setup")
@@ -297,7 +294,7 @@ def LBM_setup():
 
 
 
-def LBM_main_loop(screen):
+def LBM_main_loop(screen): 
     screen.fill("black")
 
     global discrete_vels_prev
