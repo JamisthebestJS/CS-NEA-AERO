@@ -6,6 +6,7 @@ Currently have a (seemingly) functional LBM simulation, along with an aerofoil d
 
 
 TODO:
-Add aerofoil loading (before simulation)
 Add main menu
-Fix aerofoil saving (after drawing)
+Something seems to be up with fluid simulation, but may be due to broken aerofoil loading
+  ^ also may be due to aerofoil sections being given a velocity in setup. I'll have to do some investigating
+Fix aerofoil saving (after drawing) (currently on average, half the aerofoil is saved/loaded (semi-intentionally)
