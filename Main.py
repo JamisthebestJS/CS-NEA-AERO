@@ -1,7 +1,7 @@
 
 import pygame
 from point_drawing_v2 import p_main
-from LBM_v2 import LBM_main, LBM_main_loop
+from LBM_v2 import LBM_setup, LBM_main_loop
 
 
  
@@ -12,8 +12,6 @@ SIM_WIDTH = 600
 SIM_HEIGHT = 300
 
 M_ITERATIONS = 10000
-
-
 
 
 #renders main menu
@@ -33,11 +31,11 @@ def main_menu(event):
     return None
 
 
-
 def main(screen):
     choice = None
     running = True
-    iteration = setup = False
+    setup = False
+    iteration = 0
     while running:
         
         for event in pygame.event.get():
@@ -46,32 +44,29 @@ def main(screen):
                 running = False
             
             
-            
             if choice == None:
-                #if the choice is exited by pressing esc, then you can re-chose
+                #if the choice is exited by pressing esc, then you can re-chose (doesnt work, so yeah, not ideal)
                 choice = main_menu(event)
             
             elif choice == "sim":
                 if setup == False:
-                    setup = LBM_main()
-                    
-                screen = pygame.display.set_mode((SIM_WIDTH, SIM_HEIGHT))
-                if iteration < M_ITERATIONS:
-                    iteration+=1
-                    LBM_main_loop(screen)
-                    
-                    if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                        choice == None
-                        #hopefully exits only uppermost loop (the sim loop)
-                        break
-            
+                    screen = pygame.display.set_mode((SIM_WIDTH, SIM_HEIGHT))
+                    setup = LBM_setup()
+                    setup = True
+        
             elif choice == "draw":
                 running = p_main(screen, event)
+    
 
+        if choice == "sim":
+            if iteration < M_ITERATIONS and setup == True:
+                iteration+=1
+                LBM_main_loop(screen)
+        
+        
 
 
 pygame.init()
-global screen
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_WIDTH))
 pygame.display.set_caption("Virtual Wind Tunnel")
 clock = pygame.time.Clock()
@@ -88,6 +83,7 @@ if __name__ == "__main__":
 
 BUGS:
 - exiting simulation to main menu doesnt work
+- only updates when mouse movement
 
 
 
@@ -97,6 +93,12 @@ ERRORS:
 
 
 DONE#:
+
+ADDED:
+- implemented jax since its a lot faster (LBM)
+- changed plot from density to velocity (LBM)
+
+
 
 IMPROVED:
 - 

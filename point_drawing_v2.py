@@ -202,7 +202,7 @@ class Modes(staticmethod):
                 continue
             else: 
                 #even number of points in that column
-                swaps = 0
+                swaps = False
                 y_start = 0
                 #for each node in the sublist
                 for node in sublist:
@@ -210,7 +210,7 @@ class Modes(staticmethod):
                     y_end = node[1]
                     vert_mask[node[0], y_start:y_end] = swaps
                     y_start = y_end
-                    swaps = (1 if (swaps == 0) else 0)
+                    swaps = (True if (swaps == False) else False)
         
         #something going wrong here or in hori_sublist stuff
         for sublist in hori_sublist:
@@ -220,7 +220,7 @@ class Modes(staticmethod):
                 continue
             else: 
                 #even number of points in that column
-                swaps = 0
+                swaps = False
                 x_start = 0
                 #for each node in the sublist
                 for node in sublist:
@@ -228,7 +228,7 @@ class Modes(staticmethod):
                     x_end = node[0]
                     hori_mask[x_start:x_end, node[1]] = swaps
                     x_start = x_end
-                    swaps = (1 if (swaps == 0) else 1)
+                    swaps = (True if (swaps == False) else True)
 
         
 
@@ -239,10 +239,6 @@ class Modes(staticmethod):
         #AND the masks and save to file      
         object_mask = np.array
         object_mask = np.logical_and(hori_mask,vert_mask)
-        for i in object_mask:
-            for j in i:
-                if j == 1:
-                    print("true")
         Toolbox.aerofoil_save_to_file(object_mask)  
             
         
@@ -434,6 +430,7 @@ def p_main(screen, event):
         running = False
         pygame.quit()
     
+    
     #CHANGING MODES
     if event.type == pygame.KEYDOWN:
             #for testing, set modes with keyboard keys
@@ -505,38 +502,16 @@ def p_main(screen, event):
 
 """
 TODO:
-- some sort of file saving. The formatting of this is dependent on how I want to load it in the aero simulator
-
-
 - GUI stuff. Buttons for modes, maybe a sidebar for info
 (smaller things)
 - dont allow to place a vertex on top of another vertex (or too close)
 
-
 ERRORS (causes crash):
 -
 
-
 BUG:
 - saving the aerofoil for some reason visually shrinks it to simualation size, which shouldnt happen
-    I am really lost as to why. Does NOT seem like it
-
-- fix aerofoil mask generator
-
-
-DONE (since last git push):
-
-added:
--
-
-
-fixed:
--
-
-
-removed:
-- 
-
+    I am really lost as to why. Does NOT seem like it should do that at all
 
 
 
