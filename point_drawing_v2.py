@@ -139,12 +139,9 @@ class Modes(staticmethod):
         And then maybe another method from elsewhere which renders the save menu etc. bc the other Modes methods are quite small and more or less just call other functions.
         
         """
-        
-        #why make rendered aerofoil smaller? its like I'm applyin the scalar multiplication to the wrong version of path, but I'm most assuredly not?
-        
+        #why making rendered aerofoil smaller? its like I'm applyin the scalar multiplication to the wrong version of path, but I'm most assuredly not?
         save_path = CatmullRom.get_path()
-        
-        #discretisation
+        #discretisation and resizing to fit simulation size
         for i in save_path:
             i[0] = int(i[0]//(SCREEN_SIZE//SIM_HEIGHT))
             i[1] = int(i[1]//(SCREEN_SIZE//SIM_HEIGHT))
@@ -158,14 +155,13 @@ class Modes(staticmethod):
             if key not in seen_keys:
                 seen_keys.add(key)
                 new.append(sublist)
-        
-        #here the save_path is a list of unique coordinates that fuly defines the boundary of the aerofoil
+        #here the save_path is a list of unique coordinates that fully defines the boundary of the aerofoil
         save_path = new
         
         #make a list of sublists with all points with the same x pos, and a list of sublists with points w same y pos
         #these lists also need to be sorted ASC according to the pas-meme attribute
-        hori_sublist = [[] for i in range(SIM_HEIGHT)] #creates a list of (what will be lists). 1 for each possible y pos
-        vert_sublist = [[] for i in range(SIM_HEIGHT)] #creates a list of (what will be lists). 1 for each possible x pos
+        hori_sublist = [[] for _ in range(SIM_HEIGHT)] #creates a list of (what will be lists). 1 for each possible y pos
+        vert_sublist = [[] for _ in range(SIM_HEIGHT)] #creates a list of (what will be lists). 1 for each possible x pos
         for i in range(len(save_path)):
             vert_sublist[save_path[i][0]].append(save_path[i])
             hori_sublist[save_path[i][1]].append(save_path[i])
@@ -174,7 +170,6 @@ class Modes(staticmethod):
         vert_sublist = [sublist for sublist in vert_sublist if sublist]
         hori_sublist = [sublist for sublist in hori_sublist if sublist]
         
-                
         #now we need to sort the sublists in terms of the changing element, ASC
         #note this doesnt work if shape is tooo small (like a couple pixels or smt idrk)
         #also bit of an issue as its trying to sort 2-el arrays. For quick and insertion its simple enough but really unsure about heap sort
@@ -188,61 +183,51 @@ class Modes(staticmethod):
         vert_mask = np.zeros((SIM_HEIGHT, SIM_HEIGHT))
         hori_mask = np.zeros((SIM_HEIGHT, SIM_HEIGHT))
         
-        #iterate through each sublist.
-        #do some algo for swapping to 1s in each mask
-        #if odd number, ignore for now
-        #if even number, for each one, swap, starting at false for 0, going to false for 2.
-        #this could do with being explained in NEA with some pseudocode or something like that
         
+        #need to remove adjacents and only keep edgely adjacent (i.e. nodes with 1 or no adjacent nodes)
+        for sublist in vert_sublist:
+            nodes_to_delete = []
+            for i in range(1, len(sublist)-1):
+                if sublist[i-1][0] == sublist[i][0] and sublist[i+1][0] == sublist[i][0]:
+                    nodes_to_delete.append(sublist[i])
+
+            
+            for i in nodes_to_delete:
+                sublist.remove(i)
+        
+        
+        for sublist in hori_sublist:
+            nodes_to_delete = []
+            for i in range(1, len(sublist)-1):
+                if sublist[i-1][1] == sublist[i][1] and sublist[i+1][1] == sublist[i][1]:
+                    nodes_to_delete.append(sublist[i])
+            
+            for i in nodes_to_delete:
+                sublist.remove(i)
         
         #for each column which contains some aerofoil
         for sublist in vert_sublist:
-            #if odd number of aero nodes, ignore (temporarily)
-            #one of the points needs to be ignored, if you think about it.
-            #Think about polynomial graphs. If odd number of solutions to f(x) = 0, one of the roots must be repeated (for order >1), and so must be stationary point
-            #stationary points shouldnt flip swaps
-            #so I need to know when its the local minimum/maximum then (st.pt.)
-            #How do I do that? On paper.
-            if len(sublist) % 2 != 0:
-                continue
-            else: 
-                #even number of points in that column
-                swaps = False
-                y_start = 0
-                #for each node in the sublist
-                for node in sublist:
-                    #make True btwn the first and second, False btwn second and third, etc... in the vertical mask
-                    y_end = node[1]
-                    vert_mask[node[0], y_start:y_end] = swaps
-                    y_start = y_end
-                    swaps = (True if (swaps == False) else False)
-                    
-                        
-
+            swaps = False
+            y_start = 0
+            #for each node in the sublist
+            for node in sublist:
+                #make True btwn the first and second, False btwn second and third, etc... in the vertical mask
+                y_end = node[1]
+                vert_mask[node[0], y_start:y_end] = swaps
+                y_start = y_end
+                swaps = (True if (swaps == False) else False)
                     
         
-        #something going wrong here or in hori_sublist stuff
         for sublist in hori_sublist:
-            print(f"sublist {sublist}")
-            #if odd number of aero nodes, ignore (temporarily)
-            if len(sublist) % 2 != 0:
-                continue
-            else: 
-                #even number of points in that column
-                swaps = False
-                x_start = 0
-                #for each node in the sublist
-                for node in sublist:
-                    #make True btwn the first and second, False btwn second and third, etc... in the vertical mask
-                    x_end = node[0]
-                    hori_mask[x_start:x_end, node[1]] = swaps
-                    x_start = x_end
-                    swaps = (True if (swaps == False) else True)
-                        
-        
-
-        
-        #HORI_MASK IS ALL FALSE
+            swaps = False
+            x_start = 0
+            #for each node in the sublist
+            for node in sublist:
+                #make True btwn the first and second, False btwn second and third, etc... in the vertical mask
+                x_end = node[0]
+                hori_mask[x_start:x_end, node[1]] = swaps
+                x_start = x_end
+                swaps = (True if (swaps == False) else True)
         
         
         #AND the masks and save to file      

@@ -66,11 +66,17 @@ from pathlib import Path
 import jax.numpy as jnp
 import jax
 
-global aerofoil
+global aerofoil, render_aerofoil
 aerofoil = []
+render_aerofoil = False
+
+
+global frame_count
+frame_count = 0
 
 #constants
-REYNOLDS = 100
+#changed from 100
+REYNOLDS = 10000
 
 N_POINTS_X = 600
 N_POINTS_Y = 300
@@ -79,7 +85,10 @@ N_POINTS_Y = 300
 SCREEN_HEIGHT = N_POINTS_Y
 SCREEN_WIDTH = N_POINTS_X 
 
-MAX_RENDERED_VAL = 0.04
+MAX_RENDERED_VAL = 0.1
+MAX_RENDERED_DENSITY = 2.0
+MAX_RENDERED_VORT = 0.2
+RENDER_TYPE = "velocity" #options: "density", "velocity", "vorticity"
 
 """
 need to define inner boundary for aerofoil
@@ -87,7 +96,7 @@ being done in point_drawing, saved as a True/False field, and then loaded here a
 
 """
 
-MAX_HORIZONTAL_INFLOW_VEL = 500
+MAX_HORIZONTAL_INFLOW_VEL = 0.04
 
 PLOT_N_STEPS = 25
 SKIP_FIRST_N_STEPS = 0
@@ -112,9 +121,6 @@ TOP_VELS = jnp.array([2, 5, 6])
 BOTTOM_VELS = jnp.array([4, 7, 8])
 VERTICAL_VELS = jnp.array([0, 2, 4])
 HORIZONTAL_VELS = jnp.array([0, 1, 3])
-
-global density
-
 
 class Helpers(staticmethod):
         
@@ -171,45 +177,56 @@ class Helpers(staticmethod):
         return equilibrium_discrete_vels
 
     @staticmethod
-    def load_aerofoil():
+    def load_aerofoil(aerofoil_name):
         mask = []        
         #temporarily always uses aerofoil 1
-        aerofoil_file = Path("Aerofoils\\aerofoil 1.txt")
+        aerofoil_file = Path(f"Aerofoils\\{aerofoil_name}")
         if aerofoil_file.is_file() == False:
             print("No aerofoil to load. Please draw an aerofoil before attempting to use the wind tunnel simulator")
-            return -1
         else:
-            with open("Aerofoils\\aerofoil 1.txt", "r")as file:
+            with open(aerofoil_file, "r")as file:
                 for line in file:
                     mask.append(line)
-            return mask
+        return mask
+
+    @staticmethod
+    def init_colours(screen):
+        global colours
+        colours = jnp.zeros((screen.get_width(), screen.get_height(), 3), dtype=jnp.uint8)
         
 
-def render(screen, vel_mag):
-    global aerofoil
-    
-    width, height = vel_mag.shape
-    
-    colours = jnp.zeros((width, height, 3), dtype=jnp.uint8)
-    values = jnp.clip(vel_mag, 0, MAX_RENDERED_VAL)
-    col = (values/MAX_RENDERED_VAL*255).astype(jnp.uint8)
-    colours = colours.at[..., 0].set(col)
+def render(screen, vel_mag, density, vorticity):
+    global aerofoil, colours, frame_count, render_aerofoil
+    frame_count+=1
 
+    if RENDER_TYPE == "density":
+        colours = colours.at[..., 0].set((density[:]/MAX_RENDERED_DENSITY)*255).astype(jnp.uint8)
+        
+    elif RENDER_TYPE == "velocity":
+        colours = colours.at[..., 0].set((vel_mag[:]/MAX_RENDERED_VAL)*255).astype(jnp.uint8)
+    
+    elif RENDER_TYPE == "voriticity":
+        colours = colours.at[..., 0].set((vorticity[:]/MAX_RENDERED_VORT)*255).astype(jnp.uint8)
+        
+    
+    #values = jnp.clip(vel_mag, 0, MAX_RENDERED_VAL)
 
-    if isinstance(aerofoil, (list, tuple)):
-        for x, y in aerofoil:
-            if 0 <= x < width and 0 <= y < height:
-                colours = colours.at[x, y, :].set(255)
     
-    elif isinstance(aerofoil, jnp.ndarray):
-        mask = aerofoil.astype(bool)
-        colours[mask, :] = 255
-    
-    
+    #this is causing MASSIVE performance issues. Bigger aerofoil shapes take wayyy longer to render (like quarters frame rate for big ones)
+    """
+    if aerofoil != [] and render_aerofoil == True:
+        coords = jnp.array(aerofoil)
+        xs = coords[:, 0]
+        ys = coords[:, 1]
+        colours = colours.at[xs, ys, :].set((255)).astype(jnp.uint8)
+    """
     surf = pygame.surfarray.make_surface(colours)
-    surf = pygame.transform.scale(surf, (width, height))
+    #surf = pygame.transform.scale(surf, (width, height))
     screen.blit(surf, (0,0))
-    
+
+
+    if frame_count % 100 == 0:
+        print(f"frame {frame_count} rendered")
     pygame.display.flip()
 
 @jax.jit
@@ -224,48 +241,55 @@ def update(discrete_vels_prev):
     macro_vels_prev = Helpers.get_macro_velocities(discrete_vels_prev, density_prev)
 
     # 3. Apply inflow stuff by Zou/He  (Dirichlet BC)
-    macro_vels_prev = macro_vels_prev.at[0, 1:-1, :].set(velocity_profile[0, 1:-1, :]) #at all points but very top and very bottom
+    macro_vels_prev = macro_vels_prev.at[0, 0:-1, :].set(MAX_HORIZONTAL_INFLOW_VEL) #at all points but very top and very bottom
     
     
     #maths according to Zou/He
-    density_prev = density_prev.at[0, :].set((Helpers.get_density(discrete_vels_prev[0, :, VERTICAL_VELS].T) + 2 * Helpers.get_density(discrete_vels_prev[0, :, LEFT_VELS].T))\
-        / (1 - macro_vels_prev[0, :, 0]))
+    density_prev = density_prev.at[0, :].set((Helpers.get_density(discrete_vels_prev[0, :, VERTICAL_VELS].T) + 2 * Helpers.get_density(discrete_vels_prev[0, :, LEFT_VELS].T)) / (1 - macro_vels_prev[0, :, 0]))
     
     # 4. calc the discrete equilibria velocities
     equilibrium_discrete_vels = Helpers.get_equilibrium_velocities(macro_vels_prev, density_prev)
     
     #more Zou/He
-    discrete_vels_prev = discrete_vels_prev.at[0, :, RIGHT_VELS].set((equilibrium_discrete_vels[0, :, RIGHT_VELS]))
+    discrete_vels_prev = discrete_vels_prev.at[0, :, LEFT_VELS].set(equilibrium_discrete_vels[0, :, LEFT_VELS])
     
     # 5. BGK collisions
     # fᵢ ← fᵢ − ω (fᵢ − fᵢᵉ)
-    discrete_vels_post_collision = discrete_vels_prev - relaxation_factor * (discrete_vels_prev - equilibrium_discrete_vels)
+    discrete_vels_post_collisions = discrete_vels_prev - relaxation_factor * (discrete_vels_prev - equilibrium_discrete_vels)
+    
     # 6. bounce-back (for no-slip on interior boundary)
     for i in range(N_DISCRETE_VELOCITIES):
         #basically, anything that is now inside the aerfoil is reversed so it "bounces back" from the boundary
-        discrete_vels_post_collision = discrete_vels_post_collision.at[aerofoil, LATTICE_INDICES[i]].set(discrete_vels_prev[aerofoil, OPPOSITE_LATTICE_INDICES[i]])
+        #changed .set(...[etc.]) dont know if still correct or not.
+        #currently not working. I dont think the aerofoil[:] is properly working.
+        if aerofoil != []:
+            coords = jnp.array(aerofoil)
+            xs = coords[:, 0]
+            ys = coords[:, 1]
+            discrete_vels_post_collisions = discrete_vels_post_collisions.at[xs, ys, LATTICE_INDICES[i]].set(discrete_vels_prev[xs, ys, OPPOSITE_LATTICE_INDICES[i]])
         
     # 7. streaming along lattice vels
-    discrete_vels_streamed = discrete_vels_post_collision
+    discrete_vels_streamed = discrete_vels_post_collisions
     for i in range(N_DISCRETE_VELOCITIES):
         #e.g. velocity going diagonally down and right goes to the cell which is diagonally down and right from where it was
         #etc. for all 9 (8 going outwards) velocities
-        discrete_vels_streamed = discrete_vels_streamed.at[:, :, i].set(jnp.roll(
+        discrete_vels_streamed = discrete_vels_streamed.at[:, :, i].set(
             jnp.roll(
-                discrete_vels_post_collision[:, :, i], LATTICE_VELS[0, i], axis = 0),
-            
-            LATTICE_VELS[1, i], axis = 0
-            ))
+            jnp.roll(
+                discrete_vels_post_collisions[:, :, i], LATTICE_VELS[0, i], axis = 0), LATTICE_VELS[1, i], axis = 1
+                    )
+                    )
     
     return discrete_vels_streamed
 
 
-def LBM_setup():    
+def LBM_setup(screen, aerofoil_name):    
     #SETUP
-    kinematic_viscosity = (MAX_HORIZONTAL_INFLOW_VEL * 10) / REYNOLDS   #NOTE: 10 is radius, but an aerofoil doesnt have a radius, so not sure how that works
+    kinematic_viscosity = (MAX_HORIZONTAL_INFLOW_VEL) / REYNOLDS   #NOTE: 10 is radius, but an aerofoil doesnt have a radius, so not sure how that works
     
     global relaxation_factor
-    relaxation_factor = 1 / (3 * kinematic_viscosity + 0.5)
+    #changed from + 0.5
+    relaxation_factor = 1 / (3 * kinematic_viscosity + 2/3)
 
     #def mesh
     x = jnp.arange(N_POINTS_X)
@@ -275,37 +299,51 @@ def LBM_setup():
     #velocity profile
     global velocity_profile
     velocity_profile = jnp.zeros((N_POINTS_X, N_POINTS_Y, 2))
-    velocity_profile = velocity_profile.at[:, :, 0].set(MAX_HORIZONTAL_INFLOW_VEL) #horizontal velocity profile
+    velocity_profile = velocity_profile.at[0, :, 0].set(MAX_HORIZONTAL_INFLOW_VEL) #horizontal velocity profile
 
     global discrete_vels_prev
     discrete_vels_prev = Helpers.get_equilibrium_velocities(velocity_profile, jnp.ones((N_POINTS_X, N_POINTS_Y)))
     
     global aerofoil
-    ob_mask = Helpers.load_aerofoil() #I think this doesnt work quite right? requires a list of indices I think rather than True/False
+    ob_mask = Helpers.load_aerofoil(aerofoil_name) #I think this doesnt work quite right? requires a list of indices I think rather than True/False
     #need to get list of coords from this.
-    for i in range(len(ob_mask)):
-        for j in range(len(ob_mask[i])):
-            if ob_mask[i][j] == str(1): #part of aerofoil
-                aerofoil.append([i + SCREEN_WIDTH//8 , j])
-    #i think ^^ not working: unrelated error showed that aerofoil in update loop was [] (i.e. empty which would be why no render)
+    if ob_mask != []:
+        for i in range(len(ob_mask)):
+            for j in range(len(ob_mask[i])):
+                if ob_mask[i][j] == str(1): #part of aerofoil
+                    aerofoil.append([i + SCREEN_WIDTH//8 , j])
+        #i think ^^ not working: unrelated error showed that aerofoil in update loop was [] (i.e. empty which would be why no render)
+    else:
+        aerofoil = []
+    
+    #so dont have to initialise colours every frame
+    Helpers.init_colours(screen)
     
     print("finished setup")
     return True
 
 
 
-def LBM_main_loop(screen): 
-    screen.fill("black")
+def LBM_main_loop(screen, iteration): 
+    if screen !=None:
+        screen.fill("black")
 
-    global discrete_vels_prev
+    global discrete_vels_prev, frame_count
     discrete_vels_next = update(discrete_vels_prev)
     
     discrete_vels_prev = discrete_vels_next
     density = Helpers.get_density(discrete_vels_next)
     macro_vels = Helpers.get_macro_velocities(discrete_vels_next, density)
     vel_magnitude = jnp.linalg.norm(macro_vels, axis = -1, ord = 2)
-    render(screen, vel_magnitude)
-
+    
+    d_u__d_x, d_u__d_y = jnp.gradient(macro_vels[..., 0])
+    d_v__d_x, d_v__d_y = jnp.gradient(macro_vels[..., 1])
+    curl = (d_u__d_y - d_v__d_x)
+    
+    
+    render(screen, vel_magnitude, density, curl)
+    iteration += 1
+    return iteration
 
 """
 #TODO:
