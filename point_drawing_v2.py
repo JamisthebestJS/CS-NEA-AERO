@@ -2,7 +2,7 @@ import pygame
 from enum import Enum, auto
 import numpy as np
 from helpers.introsort import introsort
-
+from helpers.menus.aero_menu import s_menu, sidebar_btns
 
 
 
@@ -105,9 +105,12 @@ class Modes(staticmethod):
     @staticmethod
     def place_vertex(x, y):
         if VertexListOperations.get_vertices_list_length() < MAX_VERTEX_COUNT:
-            print(f"Placing vertex at ({x}, {y})")
-            Vertex(x, y)
-            CatmullRom.new_point((x, y))
+            if 0 <= x < 9*SCREEN_SIZE/10 and 0 <= y <= SCREEN_SIZE:
+                print(f"Placing vertex at ({x}, {y})")
+                Vertex(x, y)
+                CatmullRom.new_point((x, y))
+            else:
+                print(f"vertex out of bounds at {(x, y)}")
         else:
             print(f"reached limit of {MAX_VERTEX_COUNT}")
 
@@ -133,7 +136,7 @@ class Modes(staticmethod):
     
     
     @staticmethod
-    def save_to_file():
+    def save_to_file(screen, font):        
         """
         Should maybe change this a little so it calls a Helper method which does the masking stuff. 
         And then maybe another method from elsewhere which renders the save menu etc. bc the other Modes methods are quite small and more or less just call other functions.
@@ -176,34 +179,33 @@ class Modes(staticmethod):
         for i in vert_sublist:
             introsort(i, 1)
         for i in hori_sublist:
-            introsort(i, 1)
-        
-        #create seperate True/False masks for hori and vert (between 2 most extreme of each sublist)
-        #AND the masks (to ensure any weird wave-like aerofoil shapes are correctly masked)
-        vert_mask = np.zeros((SIM_HEIGHT, SIM_HEIGHT))
-        hori_mask = np.zeros((SIM_HEIGHT, SIM_HEIGHT))
+            introsort(i, 0)
         
         
+        #these can be made into a function and moved elsewhere
         #need to remove adjacents and only keep edgely adjacent (i.e. nodes with 1 or no adjacent nodes)
+        #ahhh this is the bit thats wankering off half the aerofoil
         for sublist in vert_sublist:
             nodes_to_delete = []
             for i in range(1, len(sublist)-1):
-                if sublist[i-1][0] == sublist[i][0] and sublist[i+1][0] == sublist[i][0]:
+                if (sublist[i-1][1]+1) == sublist[i][1] and (sublist[i+1][1]-1) == sublist[i][1]:
                     nodes_to_delete.append(sublist[i])
-
-            
             for i in nodes_to_delete:
                 sublist.remove(i)
-        
         
         for sublist in hori_sublist:
             nodes_to_delete = []
             for i in range(1, len(sublist)-1):
-                if sublist[i-1][1] == sublist[i][1] and sublist[i+1][1] == sublist[i][1]:
+                if (sublist[i-1][0]+1) == sublist[i][0] and (sublist[i+1][0]-1) == sublist[i][0]:
                     nodes_to_delete.append(sublist[i])
-            
             for i in nodes_to_delete:
                 sublist.remove(i)
+
+
+        #create seperate True/False masks for hori and vert (between 2 most extreme of each sublist)
+        #AND the masks (to ensure any weird wave-like aerofoil shapes are correctly masked)
+        vert_mask = np.zeros((SIM_HEIGHT, SIM_HEIGHT))
+        hori_mask = np.zeros((SIM_HEIGHT, SIM_HEIGHT))
         
         #for each column which contains some aerofoil
         for sublist in vert_sublist:
@@ -214,26 +216,33 @@ class Modes(staticmethod):
                 #make True btwn the first and second, False btwn second and third, etc... in the vertical mask
                 y_end = node[1]
                 vert_mask[node[0], y_start:y_end] = swaps
+                hori_mask[node[0], node[1]] = True
                 y_start = y_end
-                swaps = (True if (swaps == False) else False)
+                if swaps == True:
+                    swaps = False
+                else:
+                    swaps = True
                     
-        
         for sublist in hori_sublist:
             swaps = False
             x_start = 0
             #for each node in the sublist
             for node in sublist:
-                #make True btwn the first and second, False btwn second and third, etc... in the vertical mask
+                #make True btwn the first and second, False btwn second and third, etc... in the horizontal mask
                 x_end = node[0]
                 hori_mask[x_start:x_end, node[1]] = swaps
+                hori_mask[node[0], node[1]] = True
                 x_start = x_end
-                swaps = (True if (swaps == False) else True)
+                if swaps == True:
+                    swaps = False
+                else:
+                    swaps = True
         
         
         #AND the masks and save to file      
         object_mask = np.array
         object_mask = np.logical_and(hori_mask,vert_mask)
-        Toolbox.aerofoil_save_to_file(object_mask)  
+        s_menu(object_mask, screen, font)  
             
         
     @staticmethod
@@ -324,6 +333,8 @@ class VertexListOperations(object):
         
         return -1 #if not in vertex list
 
+
+
 #do i need this class? idk rn, we'll see
 class Toolbox(staticmethod):
     @staticmethod
@@ -331,43 +342,7 @@ class Toolbox(staticmethod):
         snapped_x = round(coord[0])
         snapped_y = round(coord[1])
         return snapped_x, snapped_y
-            
-    @staticmethod
-    def aerofoil_save_to_file(ob_mask):
-        #open stats file (to see how many aerofoils exist)
-        stats_file = open("stats.txt", "r")
-        stats_content = []
-        all_content = []
-        
-        for line in stats_file:
-            #remove non-number characters, then append the remaining number to stats_content
-            result = ''.join([char for char in line if char.isdigit()])
-            stats_content.append(result)
-            all_content.append(line)
-        aerofoil_count = stats_content[0]
-        stats_file.close()
-        
-        new_aerofoil_count = str(int(aerofoil_count) + 1) #keeps a record of how many aerofoils so has a default name for the aerofoils as they are saved.
-        #writes new aerofoil count into the file
-        all_content[0] = "aerofoil_count = " + str(new_aerofoil_count)
-        with open("stats.txt", "w") as file:
-            for line in all_content:
-                file.write(line)
-                
-        name = None
-        #creating the file which stores the object mask
-        if name == None:
-            name = f"aerofoil {new_aerofoil_count}"
-        
-        with open(f"Aerofoils\{name}.txt", "w") as file:
-            for line in ob_mask:
-                for node in line:
-                    if node == True:
-                        file.write(str(1))
-                    elif node == False: #can change to else if works
-                        file.write(str(0))
-                file.write("\n")
-        file.close()
+
     
 #Vertex class
 #may need to split into stuff about the list (static) and actual vertices (nonstatic)
@@ -393,39 +368,24 @@ class Vertex(object):
     def render(self, screen):
         pygame.draw.circle(screen, (255, 0, 0), (self.x, self.y), 2)
 
-class Aerofoil(object):
-    #for rendering save/delete file menu (&edit?? could save the vertices in a seperate file which allows it to be edited later?)
-    #reason for class is the scrollable menu listing the aerofoils would work quite nicely as instances of the class.
-    
-    def __init__(self):
-        pass
-    
-    def render(self, screen):
-        pass
-    
-    def get_vertices(self):
-        #gets aerofoils vertices from file
-        #the rendered button in the menu is then highlighted, so you can save over the old aerofoil, or save as new
-        #sets VertexListOperations.vertices to the vertices from file (and calls a CRS path update)
-        pass
 
-    def new_aerofoil(self):
-        pass
-        #adds button to menu when/after saving an aerofoil
-    
 #mouse dragging vars:
 dragging = False
 drag_start_pos = None
 drag_end_pos = None
 dragged_vertex_ID = None
 
-def p_main(screen, event):
+def p_main(screen, event, font):
     global dragging, drag_start_pos, drag_end_pos, dragged_vertex_ID
     #so can quit while drawing
     running = True
     if event.type == pygame.QUIT:
         running = False
         pygame.quit()
+    
+    #SIDEBAR WAY OF CHANGING MODES
+    mode = Modes.get_mode()
+    mode, screen = sidebar_btns(screen, mode, font)
     
     
     #CHANGING MODES
@@ -447,24 +407,21 @@ def p_main(screen, event):
             #debug
             if Modes.get_mode != old_mode:
                 print(f"Mode set to {Modes.get_mode()}")
-    
-    
-    
 
-    
     #IF MOUSE CLICK
     if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             # Mouse button 1 (left click) has been pressed
             mouse_x, mouse_y = Toolbox.snap_to_grid(pygame.mouse.get_pos(), SCREEN_SIZE)
             print(f"Left click at ({mouse_x}, {mouse_y})")
             
-            mode = Modes.get_mode()
             if mode == "delete" or mode == "new":
                 MODE_DICT[mode](mouse_x, mouse_y)
             
-            elif mode == "clear" or mode == "save":
-                #move is dealt with separately below
+            elif mode == "clear":
                 MODE_DICT[mode]()
+            
+            elif mode == "save":
+                MODE_DICT[mode](screen, font)
     
     
         # Track mouse drag: store position on press, compare on release
@@ -494,7 +451,7 @@ def p_main(screen, event):
     VertexListOperations.render_all_vertices(screen)
     pygame.display.flip()
 
-    return running
+    return "draw"
 
 
 """

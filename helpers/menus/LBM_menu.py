@@ -1,6 +1,8 @@
 #LBM_main_menu
 import pygame
 import os
+from helpers.introsort import introsort_items
+
 
 BTN_COLOUR = (60,220,80)
 
@@ -50,18 +52,15 @@ class Menus():
         
         
         pygame.display.flip()
-        return "main"
+        return "LBM_main"
         
     @staticmethod
     def LBM_sim_settings_menu(screen, event, font):
+        #air speed, air density, scale
+
         width, height = screen.get_size()
-        #need to render a menu which has options for setting up the LBM simulation
-        #should include options for setting viscosity, density, initial velocity, aerofoil shape
-        #as well as render type
-        #and a way to actually begin the simulation
-        
-        screen.fill((0,0,0))
-        
+
+
         pygame.draw.rect(screen, BTN_COLOUR, (width/4, height/8, width/2, height/10))
         
         set_viscosity_text = font.render("Set Viscosity", True, (0,0,0))
@@ -83,6 +82,11 @@ class Menus():
             elif width/4 <= mouse_x <= 3*width and height/8 <= mouse_y <= height/8 + height/10:
                 print("Set Density button pressed")
 
+
+
+
+        pygame.display.flip()
+        
         return "sim_settings"
 
 
@@ -105,10 +109,7 @@ class Menus():
             elif event.button == 5:
                 scroll_y = max(scroll_y - SCROLL_SPEED, -(list_height - screen.get_height()))
         
-        
-        #need to be able to return which one clicked on
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            if event.button == 1:
+            elif event.button == 1:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
                 index = (mouse_y - scroll_y)//ITEM_HEIGHT
                 if 0 <= index < len(aerofoils_list):
@@ -126,6 +127,8 @@ class HelperFuncs():
     def render_scrollable_list(screen, items, font):
         screen.fill((255,255,255))
 
+        items = introsort_items(items)
+        
         # Draw items
         for i, item in enumerate(items):
             item_rect = pygame.Rect(50, i * ITEM_HEIGHT + scroll_y, screen.get_width() - 100, ITEM_HEIGHT)
