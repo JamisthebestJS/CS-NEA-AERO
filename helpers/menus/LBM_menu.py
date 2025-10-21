@@ -10,7 +10,6 @@ BTN_COLOUR = (60,220,80)
 ITEM_HEIGHT = 50
 
 # Scroll variables
-scroll_y = 0
 SCROLL_SPEED = 20
 
 
@@ -102,32 +101,32 @@ class Menus():
         
         scroll_y = 0
         
-        list_height = len(aerofoils_list) * ITEM_HEIGHT
+        items = introsort_items(aerofoils_list)
+        
+        list_height = len(items) * ITEM_HEIGHT
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 4:
                 scroll_y = min(scroll_y + SCROLL_SPEED, 0)
             elif event.button == 5:
-                scroll_y = max(scroll_y - SCROLL_SPEED, -(list_height - screen.get_height()))
+                scroll_y = max(scroll_y - SCROLL_SPEED, screen.get_height() - list_height)
         
             elif event.button == 1:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
                 index = (mouse_y - scroll_y)//ITEM_HEIGHT
-                if 0 <= index < len(aerofoils_list):
-                    print(f"Aerofoil {aerofoils_list[index]} selected")
-                    item = aerofoils_list[index]
+                if 0 <= index < len(items):
+                    print(f"Aerofoil {items[index]} selected")
+                    item = items[index]
                     return item
                 
-        HelperFuncs.render_scrollable_list(screen, aerofoils_list, font)
+        HelperFuncs.render_scrollable_list(screen, items, font, scroll_y)
         return "aero_menu"
 
 
 class HelperFuncs():
         
     @staticmethod
-    def render_scrollable_list(screen, items, font):
+    def render_scrollable_list(screen, items, font, scroll_y):
         screen.fill((255,255,255))
-
-        items = introsort_items(items)
         
         # Draw items
         for i, item in enumerate(items):

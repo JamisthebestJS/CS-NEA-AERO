@@ -66,6 +66,7 @@ from pathlib import Path
 import jax.numpy as jnp
 import jax
 import numpy as np
+from Tests.graphs import first_graph, update_x_y
 
 global aerofoil, render_aerofoil
 aerofoil = []
@@ -77,6 +78,9 @@ frame_count = 0
 
 #constants
 #changed from 100
+
+
+
 REYNOLDS = 100
 
 N_POINTS_X = 600
@@ -85,6 +89,8 @@ N_POINTS_Y = 300
 
 SCREEN_HEIGHT = N_POINTS_Y
 SCREEN_WIDTH = N_POINTS_X 
+
+AEROFOIL_OFFSET = SCREEN_WIDTH//8
 
 MAX_RENDERED_VAL = 0.16
 MAX_RENDERED_DENSITY = 4
@@ -121,7 +127,49 @@ BOTTOM_VELS = jnp.array([4, 7, 8])
 VERTICAL_VELS = jnp.array([0, 2, 4])
 HORIZONTAL_VELS = jnp.array([0, 1, 3])
 
+#these are causing some instability potentially, will have to check properly if the case
+KINEMATIC_VISCOSITY = 1
+reynolds_number = (MAX_HORIZONTAL_INFLOW_VEL) / KINEMATIC_VISCOSITY
+speed_of_sound = 1/jnp.sqrt(3)
+mach_number = MAX_HORIZONTAL_INFLOW_VEL / (1/3) #(= MAX_HORIZONTAL_INFLOW_VEL / speed_of_sound_L**2)
+RELAXATION_OMEGA = (1.0 / (KINEMATIC_VISCOSITY/(1/3)) + 2/3)
+
+MOMENTUM_EXCHANGE_MASK_IN = jnp.zeros((N_POINTS_X, N_POINTS_Y, 9)) > 0
+momentum_exchange_mask_in_per_iter = jnp.zeros((N_POINTS_X, N_POINTS_Y, 9)) > 0
+MOMENTUM_EXCHANGE_MASK_OUT = jnp.zeros((N_POINTS_X, N_POINTS_Y, 9)) > 0
+momentum_exchange_mask_out_per_iter = jnp.zeros((N_POINTS_X, N_POINTS_Y, 9)) > 0
+
+
+
+
+
+
 class Helpers(staticmethod):
+
+    #not working?
+    @staticmethod
+    def load_aerofoil(aerofoil_name):
+        mask = jnp.zeros((N_POINTS_X, N_POINTS_Y))
+        #temporarily always uses aerofoil 1
+        aerofoil_file = Path(f"Aerofoils\\{aerofoil_name}")
+        print(f"using aerofoil file: {aerofoil_file}")
+        if aerofoil_file.is_file() == False:
+            print("No aerofoil to load. Please draw an aerofoil before attempting to use the wind tunnel simulator")
+        else:
+            with open(aerofoil_file, "r")as file:
+                for i, line in enumerate(file):
+                    line = line.rstrip('\n')
+                    line = list(map(int, line))
+                    mask = mask.at[i + AEROFOIL_OFFSET].set(line)       
+        return mask
+
+    @staticmethod
+    def init_colours(screen):
+        global colours
+        colours = jnp.zeros((screen.get_width(), screen.get_height(), 3), dtype=jnp.uint8)
+
+
+
 
     @staticmethod
     def get_density(discrete_vels):
@@ -174,26 +222,60 @@ class Helpers(staticmethod):
         
 
         return equilibrium_discrete_vels
+    
+    
+    @jax.jit
+    def get_force(discrete_velocities):
+        force = jnp.sum(
+            (LATTICE_VELS.T[jnp.newaxis, jnp.newaxis, ...] * discrete_velocities[..., jnp.newaxis])[MOMENTUM_EXCHANGE_MASK_IN] + 
+            (LATTICE_VELS.T[OPPOSITE_LATTICE_INDICES][jnp.newaxis, jnp.newaxis, ...] * discrete_velocities[..., jnp.newaxis])[MOMENTUM_EXCHANGE_MASK_OUT]
+        )
+
+        return force
 
     @staticmethod
-    def load_aerofoil(aerofoil_name):
-        mask = []        
-        #temporarily always uses aerofoil 1
-        aerofoil_file = Path(f"Aerofoils\\{aerofoil_name}")
-        print(f"using aerofoil file: {aerofoil_file}")
-        if aerofoil_file.is_file() == False:
-            print("No aerofoil to load. Please draw an aerofoil before attempting to use the wind tunnel simulator")
-        else:
-            with open(aerofoil_file, "r")as file:
-                for line in file:
-                    mask.append(line)
-        return mask
+    def get_cαcβ(alpha, beta):
+        c_alpha = LATTICE_VELS[alpha, :]
+        c_beta  = LATTICE_VELS[beta,  :]
+        return c_alpha * c_beta
+    
+    @staticmethod
+    def get_non_equilibrium_velocities(discrete_vels, macro_vels, density):
+        equilibrium_velocities = Helpers.get_equilibrium_velocities(
+                                            macro_vels,
+                                            density)
+        return discrete_vels - equilibrium_velocities
+
+    
+    @staticmethod
+    def get_stress_tensor(discrete_velocities, macroscopic_velocities, density):
+        non_equilibrium_discrete_velocities = Helpers.get_non_equilibrium_velocities(
+            discrete_velocities, macroscopic_velocities, density)
+
+        non_equilibrium_stress_tensor = ((1 - RELAXATION_OMEGA / 2) * 
+                                        jnp.sum(Helpers.cαcβ[jnp.newaxis, jnp.newaxis, jnp.newaxis, ...] * 
+                                                non_equilibrium_discrete_velocities[:, :, :, jnp.newaxis, jnp.newaxis, :],
+                                                axis = -1))
+        return non_equilibrium_stress_tensor
 
     @staticmethod
-    def init_colours(screen):
-        global colours
-        colours = jnp.zeros((screen.get_width(), screen.get_height(), 3), dtype=jnp.uint8)
+    def get_strain_rate_tensor_LB(discrete_velocities, macroscopic_velocities, density):
+        stress_tensor = Helpers.get_stress_tensor(discrete_velocities, macroscopic_velocities, density)
+        strain_rate_tensor = (stress_tensor /
+                                (2 * 
+                                density[..., jnp.newaxis, jnp.newaxis] * 
+                                KINEMATIC_VISCOSITY)
+                                )
+        return strain_rate_tensor
+    
+    @staticmethod
+    def get_strain_rate_tensor_FD(macro_vels):
+        disalligned_gradients = jnp.array([jnp.gradient(macro_vels[..., i]) for i in range(3)])
+
+        gradients = jnp.einsum('ij... -> ...ij', disalligned_gradients)
+        return - (gradients + jnp.einsum('...ij -> ...ji', gradients))/2
         
+    
 
 def render(screen, vel_mag, density, vorticity, render_type):
     global aerofoil, colours, frame_count, render_aerofoil
@@ -236,6 +318,7 @@ def render(screen, vel_mag, density, vorticity, render_type):
 @jax.jit
 def update(discrete_vels_prev):
     global aerofoil
+       
     
     # 1. Apply outflow boundary condition on the right boundary
     discrete_vels_prev = discrete_vels_prev.at[-1, :, LEFT_VELS].set(discrete_vels_prev[-2, :, LEFT_VELS]) #(bounday stuff has same value as stuff one cell further left)
@@ -257,7 +340,7 @@ def update(discrete_vels_prev):
     
     # 5. BGK collisions
     # fᵢ ← fᵢ − ω (fᵢ − fᵢᵉ)
-    discrete_vels_post_collisions = discrete_vels_prev - relaxation_factor * (discrete_vels_prev - equilibrium_discrete_vels)
+    discrete_vels_post_collisions = discrete_vels_prev - RELAXATION_OMEGA * (discrete_vels_prev - equilibrium_discrete_vels)
     
     # 6. bounce-back (for no-slip on interior boundary)
     for i in range(N_DISCRETE_VELOCITIES):
@@ -296,14 +379,15 @@ def update(discrete_vels_prev):
     return discrete_vels_streamed
 
 
-def LBM_setup(screen, aerofoil_name):    
+def LBM_setup(screen, aerofoil_name):
+    """
     #SETUP
     kinematic_viscosity = (MAX_HORIZONTAL_INFLOW_VEL) / REYNOLDS   #NOTE: 10 is radius, but an aerofoil doesnt have a radius, so not sure how that works
     
     global relaxation_factor
     #changed from + 0.5
     relaxation_factor = 1 / (3 * kinematic_viscosity + 2/3+1/16) #looks like strange number to add. Its been tested as good for stability
-
+    """
     #def mesh
     x = jnp.arange(N_POINTS_X)
     y = jnp.arange(N_POINTS_Y)
@@ -317,20 +401,45 @@ def LBM_setup(screen, aerofoil_name):
     global discrete_vels_prev
     discrete_vels_prev = Helpers.get_equilibrium_velocities(velocity_profile, jnp.ones((N_POINTS_X, N_POINTS_Y)))
     
-    global aerofoil
-    ob_mask = Helpers.load_aerofoil(aerofoil_name) #I think this doesnt work quite right? requires a list of indices I think rather than True/False
+    global aerofoil, ob_mask
+    ob_mask = Helpers.load_aerofoil(aerofoil_name)
     #need to get list of coords from this.
-    if ob_mask != []:
-        for i in range(len(ob_mask)):
-            for j in range(len(ob_mask[i])):
-                if ob_mask[i][j] == str(1): #part of aerofoil
-                    aerofoil.append([i + SCREEN_WIDTH//8 , j])
+    if  not jnp.array_equal(ob_mask, jnp.zeros((SCREEN_WIDTH, SCREEN_HEIGHT))):
+        indexes = jnp.where(ob_mask == 1)
+        aerofoil = list(zip(indexes[0], indexes[1]))
         #i think ^^ not working: unrelated error showed that aerofoil in update loop was [] (i.e. empty which would be why no render)
     else:
         aerofoil = []
+        print("aerofoil is None")
+
     
     #so dont have to initialise colours every frame
     Helpers.init_colours(screen)
+    
+    global MOMENTUM_EXCHANGE_MASK_IN, MOMENTUM_EXCHANGE_MASK_OUT
+    for i, (x,y) in enumerate(LATTICE_VELS.T):
+        location_in = jnp.logical_and(jnp.roll(
+                                            jnp.roll(
+                                                jnp.logical_not(ob_mask[:, :]),
+                                            x, axis=0), 
+                                        y, axis=1), ob_mask)
+        MOMENTUM_EXCHANGE_MASK_IN = MOMENTUM_EXCHANGE_MASK_IN.at[location_in, i].set(True)
+        
+        
+        location_out = jnp.logical_and(jnp.roll(
+                                            jnp.roll(
+                                                ob_mask,
+                                            -x, axis=0),
+                                        -y, axis=1), jnp.logical_not(ob_mask))
+        
+        MOMENTUM_EXCHANGE_MASK_OUT = MOMENTUM_EXCHANGE_MASK_OUT.at[location_out, OPPOSITE_LATTICE_INDICES[i]].set(True)
+    
+    global graph
+    graph = first_graph()
+    
+    
+    
+    
     
     print("finished setup")
     return True
@@ -350,6 +459,13 @@ def LBM_main_loop(screen, iteration, render_type):
     vel_magnitude = jnp.linalg.norm(macro_vels, axis = -1, ord = 2)
     
     
+    
+    #tests
+    horizontal_force = Helpers.get_force(discrete_vels_next)
+    
+    if iteration % 25 == 0 and iteration > 500:
+        update_x_y(graph, iteration, horizontal_force)
+    
     d_u__d_x, d_u__d_y = jnp.gradient(macro_vels[..., 0])
     d_v__d_x, d_v__d_y = jnp.gradient(macro_vels[..., 1])
     curl = d_u__d_y - d_v__d_x
@@ -360,7 +476,7 @@ def LBM_main_loop(screen, iteration, render_type):
 """
 #TODO:
 - change boundary conditions to make top and bottom be bounce back (no slip)
-- smagorinsky turbulence model
+- smagorinsky turbulence model? Might be too much for the scope
 
 ERRORS:
 -

@@ -170,7 +170,7 @@ def insertion_sort_items(arr, begin, end):
 
 
 
-def partition_items(arr, low, high, pos):
+def partition_items_items(arr, low, high):
   # pivot
     pivot = arr[high]
   # index of smaller el
@@ -222,7 +222,7 @@ def introsort_util_items(arr, begin, end, depthLimit):
     pivot = temp
     # partitionPoint partitioning index
     # arr[partitionPoint] now at right place
-    partitionPoint = partition_items(arr, begin, end)
+    partitionPoint = partition_items_items(arr, begin, end)
     # Separately sort els before and after partition
     introsort_util_items(arr, begin, partitionPoint - 1, depthLimit - 1)
     introsort_util_items(arr, partitionPoint + 1, end, depthLimit - 1)

@@ -17,10 +17,7 @@ MAX_VERTEX_COUNT = 30
 class CatmullRom(staticmethod):
     points = []
     path = np.array([])
-    
-    #do CatmullRom.update_vertices() when vertex moved/deleted
-    #do CatmullRom.new_vertex() when vertex added
-    
+
     @staticmethod
     def catmull_rom(p0, p1, p2, p3, t):
         a0 = []
@@ -49,7 +46,7 @@ class CatmullRom(staticmethod):
                 #if i < n - 1 or j == 0:
                 CatmullRom.path.append(CatmullRom.catmull_rom(p0, p1, p2, p3, t))
             
-            #trying to get first to join to last point
+        #trying to get first to join to last point
         for j in range(resolution):
             t = j / resolution
             CatmullRom.path.append(CatmullRom.catmull_rom(CatmullRom.points[-2], CatmullRom.points[-1], CatmullRom.points[0], CatmullRom.points[1], t))
@@ -158,34 +155,33 @@ class Modes(staticmethod):
             if key not in seen_keys:
                 seen_keys.add(key)
                 new.append(sublist)
-        #here the save_path is a list of unique coordinates that fully defines the boundary of the aerofoil
+        #here the save_path is a list of the minimal number of unique coordinates that still fully defines the boundary of the aerofoil
         save_path = new
         
-        #make a list of sublists with all points with the same x pos, and a list of sublists with points w same y pos
-        #these lists also need to be sorted ASC according to the pas-meme attribute
-        hori_sublist = [[] for _ in range(SIM_HEIGHT)] #creates a list of (what will be lists). 1 for each possible y pos
-        vert_sublist = [[] for _ in range(SIM_HEIGHT)] #creates a list of (what will be lists). 1 for each possible x pos
+        #make a list of sublists with all points with the same x pos, and a list of sublists with points with same y pos
+        #these lists also need to be sorted ASC according to the pas-meme attribute - done
+        hori_sublists = [[] for _ in range(SIM_HEIGHT)] #creates a list of (what will be lists). 1 for each possible y pos
+        vert_sublists = [[] for _ in range(SIM_HEIGHT)] #creates a list of (what will be lists). 1 for each possible x pos
         for i in range(len(save_path)):
-            vert_sublist[save_path[i][0]].append(save_path[i])
-            hori_sublist[save_path[i][1]].append(save_path[i])
+            vert_sublists[save_path[i][0]].append(save_path[i])
+            hori_sublists[save_path[i][1]].append(save_path[i])
         
         # remove empty sublists
-        vert_sublist = [sublist for sublist in vert_sublist if sublist]
-        hori_sublist = [sublist for sublist in hori_sublist if sublist]
+        vert_sublists = [sublist for sublist in vert_sublists if sublist]
+        hori_sublists = [sublist for sublist in hori_sublists if sublist]
         
         #now we need to sort the sublists in terms of the changing element, ASC
-        #note this doesnt work if shape is tooo small (like a couple pixels or smt idrk)
-        #also bit of an issue as its trying to sort 2-el arrays. For quick and insertion its simple enough but really unsure about heap sort
-        for i in vert_sublist:
+        #also bit of an issue as its trying to sort 2-el arrays. For quick and insertion its simple enough but really unsure about heap sort - done
+        for i in vert_sublists:
             introsort(i, 1)
-        for i in hori_sublist:
+        for i in hori_sublists:
             introsort(i, 0)
         
         
         #these can be made into a function and moved elsewhere
         #need to remove adjacents and only keep edgely adjacent (i.e. nodes with 1 or no adjacent nodes)
-        #ahhh this is the bit thats wankering off half the aerofoil
-        for sublist in vert_sublist:
+        #ahhh this is the bit thats wankering off half the aerofoil i think
+        for sublist in vert_sublists:
             nodes_to_delete = []
             for i in range(1, len(sublist)-1):
                 if (sublist[i-1][1]+1) == sublist[i][1] and (sublist[i+1][1]-1) == sublist[i][1]:
@@ -193,14 +189,15 @@ class Modes(staticmethod):
             for i in nodes_to_delete:
                 sublist.remove(i)
         
-        for sublist in hori_sublist:
+        
+        for sublist in hori_sublists:
             nodes_to_delete = []
             for i in range(1, len(sublist)-1):
                 if (sublist[i-1][0]+1) == sublist[i][0] and (sublist[i+1][0]-1) == sublist[i][0]:
+                    print(f"deleting node at {sublist[i][0], sublist[i][1]}")
                     nodes_to_delete.append(sublist[i])
             for i in nodes_to_delete:
                 sublist.remove(i)
-
 
         #create seperate True/False masks for hori and vert (between 2 most extreme of each sublist)
         #AND the masks (to ensure any weird wave-like aerofoil shapes are correctly masked)
@@ -208,29 +205,29 @@ class Modes(staticmethod):
         hori_mask = np.zeros((SIM_HEIGHT, SIM_HEIGHT))
         
         #for each column which contains some aerofoil
-        for sublist in vert_sublist:
+        for sublist in vert_sublists:
             swaps = False
             y_start = 0
             #for each node in the sublist
             for node in sublist:
                 #make True btwn the first and second, False btwn second and third, etc... in the vertical mask
                 y_end = node[1]
-                vert_mask[node[0], y_start:y_end] = swaps
-                hori_mask[node[0], node[1]] = True
+                vert_mask[node[0], y_start:y_end-1] = swaps
+                vert_mask[node[0], node[1]] = True
                 y_start = y_end
                 if swaps == True:
                     swaps = False
                 else:
                     swaps = True
                     
-        for sublist in hori_sublist:
+        for sublist in hori_sublists:
             swaps = False
             x_start = 0
             #for each node in the sublist
             for node in sublist:
                 #make True btwn the first and second, False btwn second and third, etc... in the horizontal mask
                 x_end = node[0]
-                hori_mask[x_start:x_end, node[1]] = swaps
+                hori_mask[x_start:x_end-1, node[1]] = swaps
                 hori_mask[node[0], node[1]] = True
                 x_start = x_end
                 if swaps == True:
@@ -242,8 +239,11 @@ class Modes(staticmethod):
         #AND the masks and save to file      
         object_mask = np.array
         object_mask = np.logical_and(hori_mask,vert_mask)
-        s_menu(object_mask, screen, font)  
-            
+        s_menu(object_mask, screen, font)
+        s_menu(vert_mask, screen, font)
+        s_menu(hori_mask, screen, font)
+        
+        
         
     @staticmethod
     def set_mode(new_mode):

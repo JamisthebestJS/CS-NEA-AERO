@@ -118,42 +118,26 @@ if __name__ == "__main__":
     
 """
 #TODO
-- add introsort to scrollable aerofoil list so 10 goes after 9, not after 1 (since currently sorted alphabetically, or do I want to allow renameing? idk, probably not since not in FRs))
-- change up the way the aerofoil saving menu works to be able to place in MENU_DICT, just for code cleanliness
-
+- 
 
 BUGS:
-- 
+- a couple issues with menus. Specifically the point drawing sidebar (still WIP)
 
 
 ERRORS:
 - in rendering (LBM) casting error from float32 to uint8
 - if any path is off the screen, error (DRAW)
+- mega crash caused by something to do with something to do with the plotting stuff (although never happened since the first time??)
 
 
 DONE#:
-
-NOT REALLY IMPROVED:
-- aerofoil storage. It's still not great. Maybe a little better? not really. May need a rethink.
-
-
-
 ADDED:
 - 
-
-
 
 IMPROVED:
 - 
 
-
 FIXED:
-- velocity acting strangely. Still not perfect. (LBM)
-- half fixed aerofoil saving. Strangely cuts off the bottom half however (LBM/PD)
-- only updates when mouse movement (LBM)
-- aerofoil does not seem to affect flow (LBM)
-- exiting simulation to main menu doesnt work (LBM)
-- velocity is always max or 0. No real variation (LBM)
-- some weird stuff happening (LBM)
+
 
 """
