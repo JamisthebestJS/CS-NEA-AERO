@@ -1,0 +1,36 @@
+
+
+
+"""
+Flood fill BFS algorithm.
+"""
+
+FUNC FloodFill(src_x, src_y, image, new_colour):
+    
+    old_colour = image[scr_x][scr_y]
+
+    IF old_colour = new_colour THEN
+        END FUNC
+    END IF
+
+    enqueue((src_x, scr_y))
+
+    directions = [(1,0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, -1), (-1, 1)]
+
+    image[scr_x][scr_y] = new_colour
+    
+    WHILE queue not empty
+        item = dequeue
+        x = item[0]
+        y = item[1]
+
+        FOR dx, dy in directions
+            new_x = x + dx
+            new_y = y + dy
+
+            IF 0 <= nx < rows AND 0 <= ny < cols AND image[new_x][new_y] == old_colour THEN
+                image[new_x][new_y] = new_colour
+                enqueue((new_x, new_y))
+            END IF
+        
+END FUNC

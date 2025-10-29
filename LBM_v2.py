@@ -66,7 +66,7 @@ from pathlib import Path
 import jax.numpy as jnp
 import jax
 import numpy as np
-from Tests.graphs import first_graph, update_x_y
+from helpers.graphs import update_graphs
 
 global aerofoil, render_aerofoil
 aerofoil = []
@@ -140,7 +140,8 @@ MOMENTUM_EXCHANGE_MASK_OUT = jnp.zeros((N_POINTS_X, N_POINTS_Y, 9)) > 0
 momentum_exchange_mask_out_per_iter = jnp.zeros((N_POINTS_X, N_POINTS_Y, 9)) > 0
 
 
-
+# Enable 64bit
+jax.config.update("jax_enable_x64", True)
 
 
 
@@ -241,39 +242,29 @@ class Helpers(staticmethod):
     
     @staticmethod
     def get_non_equilibrium_velocities(discrete_vels, macro_vels, density):
-        equilibrium_velocities = Helpers.get_equilibrium_velocities(
-                                            macro_vels,
-                                            density)
+        equilibrium_velocities = Helpers.get_equilibrium_velocities(macro_vels, density)
         return discrete_vels - equilibrium_velocities
 
     
     @staticmethod
-    def get_stress_tensor(discrete_velocities, macroscopic_velocities, density):
-        non_equilibrium_discrete_velocities = Helpers.get_non_equilibrium_velocities(
-            discrete_velocities, macroscopic_velocities, density)
+    def get_stress_tensor(discrete_vels, macro_vels, density):
+        non_equilibrium_vels = Helpers.get_non_equilibrium_velocities(discrete_vels, macro_vels, density)
 
-        non_equilibrium_stress_tensor = ((1 - RELAXATION_OMEGA / 2) * 
-                                        jnp.sum(Helpers.cαcβ[jnp.newaxis, jnp.newaxis, jnp.newaxis, ...] * 
-                                                non_equilibrium_discrete_velocities[:, :, :, jnp.newaxis, jnp.newaxis, :],
-                                                axis = -1))
+        non_equilibrium_stress_tensor = ((1 - RELAXATION_OMEGA / 2) * jnp.sum(cαcβ * non_equilibrium_vels, axis = -1))
         return non_equilibrium_stress_tensor
 
     @staticmethod
-    def get_strain_rate_tensor_LB(discrete_velocities, macroscopic_velocities, density):
-        stress_tensor = Helpers.get_stress_tensor(discrete_velocities, macroscopic_velocities, density)
-        strain_rate_tensor = (stress_tensor /
-                                (2 * 
-                                density[..., jnp.newaxis, jnp.newaxis] * 
-                                KINEMATIC_VISCOSITY)
-                                )
+    def get_strain_rate_tensor_LB(discrete_vels, macro_vels, density):
+        stress_tensor = Helpers.get_stress_tensor(discrete_vels, macro_vels, density)
+        strain_rate_tensor = (stress_tensor / (2 * density * KINEMATIC_VISCOSITY))
         return strain_rate_tensor
     
     @staticmethod
     def get_strain_rate_tensor_FD(macro_vels):
-        disalligned_gradients = jnp.array([jnp.gradient(macro_vels[..., i]) for i in range(3)])
+        disalligned_gradients = jnp.array([jnp.gradient(macro_vels[..., i]) for i in range(2)])
 
-        gradients = jnp.einsum('ij... -> ...ij', disalligned_gradients)
-        return - (gradients + jnp.einsum('...ij -> ...ji', gradients))/2
+        gradients = jnp.einsum('...ij -> ...ji', disalligned_gradients)
+        return - (gradients + jnp.einsum('...ij -> ...ij', gradients))/2
         
     
 
@@ -326,7 +317,6 @@ def update(discrete_vels_prev):
     # 2. Compute Macroscopic Quantities (density and velocities)
     density_prev = Helpers.get_density(discrete_vels_prev)
     macro_vels_prev = Helpers.get_macro_velocities(discrete_vels_prev, density_prev)
-
     # 3. Apply inflow stuff by Zou/He  (Dirichlet BC)
     macro_vels_prev = macro_vels_prev.at[0, 1:-1, :].set(velocity_profile[0, 1:-1, :])
     #maths according to Zou/He
@@ -341,26 +331,23 @@ def update(discrete_vels_prev):
     # 5. BGK collisions
     # fᵢ ← fᵢ − ω (fᵢ − fᵢᵉ)
     discrete_vels_post_collisions = discrete_vels_prev - RELAXATION_OMEGA * (discrete_vels_prev - equilibrium_discrete_vels)
+    print("done 5")
     
     # 6. bounce-back (for no-slip on interior boundary)
+    print("done coords")
+    xs = aerofoil[:, 0]
+    print("done  xs")
+    ys = aerofoil[:, 1]
+    print("done ys")
     for i in range(N_DISCRETE_VELOCITIES):
-        #basically, anything that is now inside the aerfoil is reversed so it "bounces back" from the boundary
-        #actually this might not be correct? and might be whats causing weird stuff at front.
-        #It just reverses ALL velocities when it becomes inside the aerofoil, so some would sort of get stuck or smt no?
-        #also could maybe optimise this? does it need to do every point in aerofoil, or could it check if it has velocity first. Probably faster to just do it really.
-        if aerofoil != []:
-            coords = jnp.array(aerofoil)
-            xs = coords[:, 0]
-            ys = coords[:, 1]
-            discrete_vels_post_collisions = discrete_vels_post_collisions.at[xs, ys, LATTICE_INDICES[i]].set(discrete_vels_prev[xs, ys, OPPOSITE_LATTICE_INDICES[i]])
-
+        discrete_vels_post_collisions = discrete_vels_post_collisions.at[xs, ys, LATTICE_INDICES[i]].set(discrete_vels_prev[xs, ys, OPPOSITE_LATTICE_INDICES[i]])
+    print("done 6")
     #slip on top and bottom walls (i.e. any vertical velocity is converted to horizontal.)
     #need some paper for this.
     # 8->1, 4->0, 7->3 => bottom wall
     # 2->0, 6->3, 5->1 => top wall
-    
-
     #^^doesnt work :(
+        #^^ causes MAJOR instabilities, basically instantly does the 'cold blu-tac stretching' thing
     
     # 7. streaming along lattice vels
     discrete_vels_streamed = discrete_vels_post_collisions
@@ -373,7 +360,6 @@ def update(discrete_vels_prev):
                 discrete_vels_post_collisions[:, :, i], LATTICE_VELS[0, i], axis = 0), LATTICE_VELS[1, i], axis = 1
                     )
                     )
-
     #discrete_vels_streamed = discrete_vels_streamed.at[:, 0, BOTTOM_VELS].set((discrete_vels_prev[:, 0, ])*DIAG_COEF)
     #discrete_vels_streamed = discrete_vels_streamed.at[:, -1, TOP_VELS].set(0)
     return discrete_vels_streamed
@@ -406,7 +392,7 @@ def LBM_setup(screen, aerofoil_name):
     #need to get list of coords from this.
     if  not jnp.array_equal(ob_mask, jnp.zeros((SCREEN_WIDTH, SCREEN_HEIGHT))):
         indexes = jnp.where(ob_mask == 1)
-        aerofoil = list(zip(indexes[0], indexes[1]))
+        aerofoil = jnp.array((indexes[0], indexes[1]))
         #i think ^^ not working: unrelated error showed that aerofoil in update loop was [] (i.e. empty which would be why no render)
     else:
         aerofoil = []
@@ -420,7 +406,7 @@ def LBM_setup(screen, aerofoil_name):
     for i, (x,y) in enumerate(LATTICE_VELS.T):
         location_in = jnp.logical_and(jnp.roll(
                                             jnp.roll(
-                                                jnp.logical_not(ob_mask[:, :]),
+                                                jnp.logical_not(ob_mask),
                                             x, axis=0), 
                                         y, axis=1), ob_mask)
         MOMENTUM_EXCHANGE_MASK_IN = MOMENTUM_EXCHANGE_MASK_IN.at[location_in, i].set(True)
@@ -434,9 +420,11 @@ def LBM_setup(screen, aerofoil_name):
         
         MOMENTUM_EXCHANGE_MASK_OUT = MOMENTUM_EXCHANGE_MASK_OUT.at[location_out, OPPOSITE_LATTICE_INDICES[i]].set(True)
     
-    global graph
-    graph = first_graph()
+    global cαcβ
+    alpha, beta = jnp.meshgrid(jnp.arange(N_POINTS_Y), jnp.arange(N_POINTS_X))
+    cαcβ = Helpers.get_cαcβ(alpha, beta)
     
+
     
     
     
@@ -446,25 +434,32 @@ def LBM_setup(screen, aerofoil_name):
 
 
 
-def LBM_main_loop(screen, iteration, render_type): 
+def LBM_main_loop(screen, iteration, render_type):
     if screen !=None:
         screen.fill("black")
 
     global discrete_vels_prev, frame_count
     discrete_vels_next = update(discrete_vels_prev)
-    
     discrete_vels_prev = discrete_vels_next
     density = Helpers.get_density(discrete_vels_next)
     macro_vels = Helpers.get_macro_velocities(discrete_vels_next, density)
     vel_magnitude = jnp.linalg.norm(macro_vels, axis = -1, ord = 2)
     
-    
-    
     #tests
     horizontal_force = Helpers.get_force(discrete_vels_next)
-    
+    shear_rate_tensor = Helpers.get_strain_rate_tensor_FD(macro_vels)
+    strain_rate_FD = shear_rate_tensor[..., 0]
+
+    shear_stress = Helpers.get_strain_rate_tensor_LB(discrete_vels_next, macro_vels, density)
+    strain_rate_LB = shear_stress[..., 0]
+    #need to calc total strain rates FD and LB
+    #then find difference
+    lift = 0
+
     if iteration % 25 == 0 and iteration > 500:
-        update_x_y(graph, iteration, horizontal_force)
+        update_graphs(it_count = iteration, lift_item = lift, drag_item=horizontal_force)
+    
+    
     
     d_u__d_x, d_u__d_y = jnp.gradient(macro_vels[..., 0])
     d_v__d_x, d_v__d_y = jnp.gradient(macro_vels[..., 1])
@@ -483,10 +478,7 @@ ERRORS:
 
  
 BUGS:
-- rendering flashes quite a bit
-- aerofoil not loading (doesnt render or affect anything)
-- really inconsistent framerate (probably whats causing flashing)
-- velocity rendering is weird (and the velocity kinda just disappears)
+
 
 
 """

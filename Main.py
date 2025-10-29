@@ -118,26 +118,32 @@ if __name__ == "__main__":
     
 """
 #TODO
-- 
+- fix aerofoil stuff. Implement BFS flood-fill algo, using queue class. Place this in own file. Too many classes in point drawing already
+
 
 BUGS:
 - a couple issues with menus. Specifically the point drawing sidebar (still WIP)
+- flood fill currently just fills whole screen, if aerofoil wrong shape or size
+- aerofoil loading now does not work (LBM)
 
 
 ERRORS:
 - in rendering (LBM) casting error from float32 to uint8
-- if any path is off the screen, error (DRAW)
 - mega crash caused by something to do with something to do with the plotting stuff (although never happened since the first time??)
-
+^^ just got it again. no idea the cause. will run without touching and see if same thing.
+^^ its when I try to move the matplotlib graph. no idea why
+^^ probably like a library thing, so just going to accept that that happens.
 
 DONE#:
 ADDED:
-- 
+
 
 IMPROVED:
 - 
 
 FIXED:
-
+- if any path is off the screen, error (DRAW)
+- saving shrank aerofoil until a vertex was altered (DRAW)
+- aerofoil saving now works for some aerofoils (mostly the big ones. Need to make it so the dir vec is smaller somehow) (DRAW)
 
 """

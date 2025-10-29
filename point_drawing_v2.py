@@ -1,8 +1,8 @@
 import pygame
-from enum import Enum, auto
 import numpy as np
-from helpers.introsort import introsort
+from helpers.queue import Queue
 from helpers.menus.aero_menu import s_menu, sidebar_btns
+import math
 
 
 
@@ -134,114 +134,116 @@ class Modes(staticmethod):
     
     @staticmethod
     def save_to_file(screen, font):        
-        """
-        Should maybe change this a little so it calls a Helper method which does the masking stuff. 
-        And then maybe another method from elsewhere which renders the save menu etc. bc the other Modes methods are quite small and more or less just call other functions.
-        
-        """
-        #why making rendered aerofoil smaller? its like I'm applyin the scalar multiplication to the wrong version of path, but I'm most assuredly not?
-        save_path = CatmullRom.get_path()
+        #so saving doesnt affect rendered shape
+        raw_path = CatmullRom.get_path()
+        save_path = [ [float(p[0]), float(p[1])] if not isinstance(p, (list, tuple)) else [p[0], p[1]] for p in raw_path ]
         #discretisation and resizing to fit simulation size
         for i in save_path:
-            i[0] = int(i[0]//(SCREEN_SIZE//SIM_HEIGHT))
-            i[1] = int(i[1]//(SCREEN_SIZE//SIM_HEIGHT))
+            i[0] = int(i[0]//(SCREEN_SIZE/SIM_HEIGHT))
+            i[1] = int(i[1]//(SCREEN_SIZE/SIM_HEIGHT))
         
         #removes duplicates
         new = []
         seen_keys = set()
         for sublist in save_path:
-            # Convert the mutable list to an immutable tuple to make it hashable
-            key = tuple(sublist)
+            sub = tuple(sublist)
+            key = sub
             if key not in seen_keys:
                 seen_keys.add(key)
-                new.append(sublist)
+                new.append(sub)
         #here the save_path is a list of the minimal number of unique coordinates that still fully defines the boundary of the aerofoil
         save_path = new
         
-        #make a list of sublists with all points with the same x pos, and a list of sublists with points with same y pos
-        #these lists also need to be sorted ASC according to the pas-meme attribute - done
-        hori_sublists = [[] for _ in range(SIM_HEIGHT)] #creates a list of (what will be lists). 1 for each possible y pos
-        vert_sublists = [[] for _ in range(SIM_HEIGHT)] #creates a list of (what will be lists). 1 for each possible x pos
-        for i in range(len(save_path)):
-            vert_sublists[save_path[i][0]].append(save_path[i])
-            hori_sublists[save_path[i][1]].append(save_path[i])
+        #make a true/false mask of outline
         
-        # remove empty sublists
-        vert_sublists = [sublist for sublist in vert_sublists if sublist]
-        hori_sublists = [sublist for sublist in hori_sublists if sublist]
+        object_mask = np.zeros((SIM_HEIGHT, SIM_HEIGHT))
+        old_object_mask = np.zeros((SIM_HEIGHT, SIM_HEIGHT))
+        for i in save_path:
+            object_mask[i[0], i[1]] = True
+            old_object_mask[i[0], i[1]] = True
         
-        #now we need to sort the sublists in terms of the changing element, ASC
-        #also bit of an issue as its trying to sort 2-el arrays. For quick and insertion its simple enough but really unsure about heap sort - done
-        for i in vert_sublists:
-            introsort(i, 1)
-        for i in hori_sublists:
-            introsort(i, 0)
+        #need to somehow choose a random point in the aerofoil to begin BFS flood-fill
+        #Take top and bottom nodes
+        #get vector AB btwn them
+        """
+        get unit vector of AB
+        make the smallest component =1 by multiplying unitAB by a coefficient
+        round the other component
+        add this repeatedly to A until a non-node is found, or you go past B
+        If you go past B, repeat with left and right most nodes
+        if this also fails, then no flood-fill algo
+        """
+        #first: finding the top and bottom, left and right -most extreme nodes.
+        right = (1000, 0)
+        left = (-1, 0)
+        bottom = (0, -1)
+        top = (0, 1000)
+        for point in (save_path):
+            if point[0] < right[0]:
+                right = point
+            elif point[0] > left[0]:
+                left = point
+            
+            if point[1] < top[1]:
+                top = point
+            elif point[1] > bottom[1]:
+                bottom = point
         
+        #vector maths to get discretised direction vector
+        TB_vec = tuple(x-y for x, y in zip(bottom, top))
+        TB_vec_mag = math.sqrt(TB_vec[0]**2 + TB_vec[1]**2)
         
-        #these can be made into a function and moved elsewhere
-        #need to remove adjacents and only keep edgely adjacent (i.e. nodes with 1 or no adjacent nodes)
-        #ahhh this is the bit thats wankering off half the aerofoil i think
-        for sublist in vert_sublists:
-            nodes_to_delete = []
-            for i in range(1, len(sublist)-1):
-                if (sublist[i-1][1]+1) == sublist[i][1] and (sublist[i+1][1]-1) == sublist[i][1]:
-                    nodes_to_delete.append(sublist[i])
-            for i in nodes_to_delete:
-                sublist.remove(i)
+        n_TB_vec = (TB_vec[0] / TB_vec_mag, TB_vec[1] / TB_vec_mag)
+        discrete_dir_vec = n_TB_vec
         
+        small_comp = min(discrete_dir_vec[0], discrete_dir_vec[1])
+        coef = 1/small_comp
         
-        for sublist in hori_sublists:
-            nodes_to_delete = []
-            for i in range(1, len(sublist)-1):
-                if (sublist[i-1][0]+1) == sublist[i][0] and (sublist[i+1][0]-1) == sublist[i][0]:
-                    print(f"deleting node at {sublist[i][0], sublist[i][1]}")
-                    nodes_to_delete.append(sublist[i])
-            for i in nodes_to_delete:
-                sublist.remove(i)
+        discrete_dir_vec = (int(discrete_dir_vec[0]*coef), int(discrete_dir_vec[1]*coef))
+        
+        discrete_dir_vec_mag = math.sqrt(discrete_dir_vec[0]**2 + discrete_dir_vec[1]**2)
+        
+        #repeatedly adds dir vec to bottom and checks if it lands on a non-boundary node (i.e. is inside)
+        x, y = -1, -1
+        for i in range(int(TB_vec_mag//discrete_dir_vec_mag)):
+            check_point = tuple(x+y for x, y in zip(bottom, discrete_dir_vec))
+            
+            if object_mask[check_point[0]][check_point[1]] == False:
+                x = check_point[0]
+                y = check_point[1]
+                break
+        
+        #do left to right check if cant find valid start point in the bottom to top check
+        if x == -1:
+            LR_vec = tuple(x-y for x, y in zip(right, left))
+            LR_vec_mag = math.sqrt(LR_vec[0]**2 + LR_vec[1]**2)
+            
+            n_LR_vec = (LR_vec[0] / LR_vec_mag, LR_vec[1] / LR_vec_mag)
+            discrete_dir_vec = n_LR_vec
+            
+            small_comp = min(LR_vec[0], LR_vec[1])
+            coef = 1/small_comp
+            
+            discrete_dir_vec = (int(discrete_dir_vec[0]*coef), int(discrete_dir_vec[1]*coef))
+            
+            discrete_dir_vec_mag = math.sqrt(LR_vec[0]**2 + LR_vec[1]**2)
 
-        #create seperate True/False masks for hori and vert (between 2 most extreme of each sublist)
-        #AND the masks (to ensure any weird wave-like aerofoil shapes are correctly masked)
-        vert_mask = np.zeros((SIM_HEIGHT, SIM_HEIGHT))
-        hori_mask = np.zeros((SIM_HEIGHT, SIM_HEIGHT))
+            for i in range(int(LR_vec_mag//discrete_dir_vec_mag)):
+                check_point = tuple(x+y for x, y in zip(left, discrete_dir_vec))
+                
+                if object_mask[check_point[0]][check_point[1]] == False:
+                    x = check_point[0]
+                    y = check_point[1]
+                    break
         
-        #for each column which contains some aerofoil
-        for sublist in vert_sublists:
-            swaps = False
-            y_start = 0
-            #for each node in the sublist
-            for node in sublist:
-                #make True btwn the first and second, False btwn second and third, etc... in the vertical mask
-                y_end = node[1]
-                vert_mask[node[0], y_start:y_end-1] = swaps
-                vert_mask[node[0], node[1]] = True
-                y_start = y_end
-                if swaps == True:
-                    swaps = False
-                else:
-                    swaps = True
-                    
-        for sublist in hori_sublists:
-            swaps = False
-            x_start = 0
-            #for each node in the sublist
-            for node in sublist:
-                #make True btwn the first and second, False btwn second and third, etc... in the horizontal mask
-                x_end = node[0]
-                hori_mask[x_start:x_end-1, node[1]] = swaps
-                hori_mask[node[0], node[1]] = True
-                x_start = x_end
-                if swaps == True:
-                    swaps = False
-                else:
-                    swaps = True
+        #if valid start pos found
+        if x != -1 and y != -1:
+            print(f"starting flood-fill at {x, y}")
+            Toolbox.flood_fill(x=x, y=y, image=object_mask, new_colour=1, queue=Queue())
         
         
-        #AND the masks and save to file      
-        object_mask = np.array
-        object_mask = np.logical_and(hori_mask,vert_mask)
         s_menu(object_mask, screen, font)
-        s_menu(vert_mask, screen, font)
-        s_menu(hori_mask, screen, font)
+        s_menu(old_object_mask, screen, font)
         
         
         
@@ -338,11 +340,37 @@ class VertexListOperations(object):
 #do i need this class? idk rn, we'll see
 class Toolbox(staticmethod):
     @staticmethod
-    def snap_to_grid(coord, grid_size):
+    def snap_to_grid(coord):
         snapped_x = round(coord[0])
         snapped_y = round(coord[1])
         return snapped_x, snapped_y
-
+    
+    @staticmethod 
+    def flood_fill(x, y, image, new_colour, queue):
+        old_colour = image[x, y]
+        print("olf colour", old_colour)
+        
+        if old_colour == new_colour:
+            return image
+        
+        queue.enqueue((x, y))
+        directions = [(1,0), (-1,0), (0,1), (0,-1)]
+        image[x, y] = new_colour
+        
+        queue_count = 0
+        while queue.is_empty() == False:
+            x, y = queue.dequeue()
+            
+            for dx, dy in directions:
+                queue_count+=1
+                nx = x+dx
+                ny = y+dy
+                
+                if 0 <= nx < len(image) and 0 <= ny < len(image[0])\
+                    and image[nx, ny] == old_colour:
+                    image[nx, ny] = new_colour
+                    queue.enqueue((nx, ny))
+        print("flood-fill finished after filling", queue_count, "nodes")
     
 #Vertex class
 #may need to split into stuff about the list (static) and actual vertices (nonstatic)
@@ -411,7 +439,7 @@ def p_main(screen, event, font):
     #IF MOUSE CLICK
     if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             # Mouse button 1 (left click) has been pressed
-            mouse_x, mouse_y = Toolbox.snap_to_grid(pygame.mouse.get_pos(), SCREEN_SIZE)
+            mouse_x, mouse_y = Toolbox.snap_to_grid(pygame.mouse.get_pos())
             print(f"Left click at ({mouse_x}, {mouse_y})")
             
             if mode == "delete" or mode == "new":
