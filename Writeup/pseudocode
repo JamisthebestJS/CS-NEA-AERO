@@ -5,7 +5,7 @@
 Flood fill BFS algorithm.
 """
 
-FUNC FloodFill(src_x, src_y, image, new_colour):
+FUNC FloodFill(src_x:INT, src_y:INT, image:2d-ARRAY, new_colour:TUPLE): RETURNS 2d-ARRAY
     
     old_colour = image[scr_x][scr_y]
 
@@ -34,3 +34,35 @@ FUNC FloodFill(src_x, src_y, image, new_colour):
             END IF
         
 END FUNC
+
+
+
+
+"""
+Demonstrating how to use JAX immutable arrays
+"""
+import numpy as np
+import jax.numpy as jnp
+
+#initialising the array
+array = jnp.array()
+#creating a new array with the modified values according to the original array
+array = array.at[i].set(x)
+
+#This is the same as the following numpy
+array = np.array()
+array[i] = x
+
+
+"""
+scrollable buttons algorithm
+"""
+
+PROC render_scrollable_list(items:ARRAY, scroll_y: INT):
+    FOR ITEM and INDEX IN items:
+        item_rect = RECT(x_pad, INDEX*height, width, height)
+        if 0 <= item_rect.y <= SCREEN_HEIGHT:
+            DRAW item_rect
+            text = FONT(item, colour)
+            DRAW(text, (item_rect.x + text_x_pad, item_rect.y + text_y_pad))
+END PROC

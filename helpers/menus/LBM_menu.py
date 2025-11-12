@@ -1,7 +1,7 @@
 #LBM_main_menu
 import pygame
 import os
-from helpers.introsort import introsort_items
+from helpers.sort import insertion_sort
 
 
 BTN_COLOUR = (60,220,80)
@@ -101,7 +101,7 @@ class Menus():
         
         scroll_y = 0
         
-        items = introsort_items(aerofoils_list)
+        items = insertion_sort(aerofoils_list)
         
         list_height = len(items) * ITEM_HEIGHT
         if event.type == pygame.MOUSEBUTTONDOWN:

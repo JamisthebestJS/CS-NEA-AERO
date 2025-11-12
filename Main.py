@@ -8,6 +8,7 @@ from helpers.menus.main_menu import the_main_menu
  
 #SCREEN_HEIGHT = 800
 SCREEN_WIDTH = 600
+SCREEN_HEIGHT = 600
 
 SIM_WIDTH = 600
 SIM_HEIGHT = 300
@@ -104,21 +105,20 @@ def main(screen):
 
 
 pygame.init()
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_WIDTH))
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Virtual Wind Tunnel")
 clock = pygame.time.Clock()
-menu_font = pygame.font.SysFont("arial", 30)
 list_font = pygame.font.SysFont("arial", 20)
+menu_font = pygame.font.SysFont("arial", 30)
 big_font = pygame.font.SysFont("arial", 40)
 pygame.font.init()
 
 if __name__ == "__main__":
     main(screen)
     
-    
+
 """
 #TODO
-- fix aerofoil stuff. Implement BFS flood-fill algo, using queue class. Place this in own file. Too many classes in point drawing already
 
 
 BUGS:
