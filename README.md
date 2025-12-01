@@ -49,3 +49,8 @@ late sim curl plot (convergence occured)
 
 ~20k iterations velocity plot
 <img width="1244" height="557" alt="Screenshot 2025-11-20 204734" src="https://github.com/user-attachments/assets/5ea791e4-364c-4e58-a071-45edb9e80c72" />
+
+~25k iterations curl plot
+<img width="1244" height="555" alt="image" src="https://github.com/user-attachments/assets/10449640-6bde-4354-8046-c6162a876010" />
+
+At this point, the simulation slows down considerably. Not entirely sure why. The graph has half its points deleted every time it reaches 5000 points, which allowed me to get to 25k, but beyond that it began buffering every frmae
