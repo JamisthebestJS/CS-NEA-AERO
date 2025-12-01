@@ -20,11 +20,11 @@ def render_graph():
     if graph != None:
         del(graph)
     # plotting newer graph
-    plt.plot(iteration_list, lift_list, color="r", label='Lift')
-    plt.plot(iteration_list, drag_list, color='b', label='Drag')
+    plt.plot(iteration_list, lift_list, color='r', label='Lift')
+    plt.plot(iteration_list, drag_list, color='g', label='Drag')
     plt.xlabel("Iteration")
     plt.ylabel("Force Magnitude")
-    plt.legend(["Lift", "Drag"]) 
+    plt.legend(["Lift", "Drag"])
     plt.pause(0.25)
 
 
@@ -34,3 +34,9 @@ def update_graphs(drag_item, lift_item, it_count):
     iteration_list.append(it_count)
     
     render_graph()
+
+def clear_graph():
+    drag_list = []
+    lift_list = []
+    iteration_list = []
+    graph = None

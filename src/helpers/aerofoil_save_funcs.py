@@ -48,7 +48,7 @@ def s_menu(aerofoil, screen, font):
 
 def save(aerofoil):
     #open stats file (to see how many aerofoils exist)
-    stats_file = open("stats.txt", "r")
+    stats_file = open("helpers\\txt_files\stats.txt", "r")
     stats_content = []
     all_content = []
     
@@ -77,22 +77,7 @@ def save(aerofoil):
             for node in line:
                 if node == True:
                     file.write(str(1))
-                elif node == False: #can change to else if works
+                else:
                     file.write(str(0))
             file.write("\n")
     file.close()
-
-
-
-
-def sidebar_btns(screen, mode, font):
-    
-    width, height = screen.get_size()
-    
-    pygame.draw.rect(screen, (SB_BTN_COLOUR), (9*width/10, 0, width/10, height/10))
-    new_text = font.render("N", True, (0,0,0))
-    new_text_width, new_text_height = font.size("N")
-    screen.blit(new_text, (9*width/10 + (width/10 - new_text_width)/2, 0 + (height/10 - new_text_height)/2))
-        
-    
-    return mode, screen

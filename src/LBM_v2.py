@@ -1,5 +1,6 @@
 # LBM attempt 2
 r"""
+some notey bits. Remove at some point
 ------
 
 Lattice Boltzmann Computations
@@ -34,30 +35,10 @@ cᵢ  : Lattice Velocities
 Wᵢ  : Lattice Weights
 ω   : Relaxation factor
 
-------
-
-The flow configuration is defined using the Reynolds Number
-
-Re = (U R) / ν
-
-with:
-
-Re : Reynolds Number
-U  : Inflow Velocity
-R  : Cylinder Radius
-ν  : Kinematic Viscosity
-
-Can be re-arranged in terms of the kinematic viscosity
-
-ν = (U R) / Re
-
-Then the relaxation factor is computed according to
-
-ω = 1 / (3 ν + 0.5)
 
 ------
 
-Note that this scheme can become unstable for Reynoldsnumbers >~ 350 ²
+Note that this scheme can become unstable for Reynoldsnumbers >~ 350
 
 """
 
@@ -98,17 +79,17 @@ MAX_RENDERED_VORT = 0.00833
 
 
 
-MAX_HORIZONTAL_INFLOW_VEL = 0.04
+MAX_HORIZONTAL_INFLOW_VEL = 0.05
 horizontal_inflow_V = 100 #(m/s)
 
-
+#these need changing up for unit conversions
 DIAG_COEF = 0.70711
 #these are causing some instability potentially, will have to check properly if the case
 KINEMATIC_VISCOSITY = 1
 reynolds_number = (MAX_HORIZONTAL_INFLOW_VEL) / KINEMATIC_VISCOSITY
 speed_of_sound = 1/jnp.sqrt(3)
-mach_number = MAX_HORIZONTAL_INFLOW_VEL / (1/3) #(= MAX_HORIZONTAL_INFLOW_VEL / speed_of_sound_L**2)
-RELAXATION_OMEGA = (1.0 / (KINEMATIC_VISCOSITY/(1/3)) + 2/3)
+mach_number = MAX_HORIZONTAL_INFLOW_VEL *3 #(= MAX_HORIZONTAL_INFLOW_VEL / speed_of_sound_L**2)
+RELAXATION_NUMBER = (1.0 / (KINEMATIC_VISCOSITY/(1/3)) + 2/3)
 
 
 
@@ -143,7 +124,7 @@ class Helpers(staticmethod):
     def load_aerofoil(aerofoil_name):
         mask = jnp.zeros((N_POINTS_X, N_POINTS_Y))
         #temporarily always uses aerofoil 1
-        aerofoil_file = Path(f"Aerofoils\\{aerofoil_name}")
+        aerofoil_file = Path(f"src\helpers\\txt_files\Aerofoils\{aerofoil_name}")
         print(f"using aerofoil file: {aerofoil_file}")
         if aerofoil_file.is_file() == False:
             print("No aerofoil to load. Please draw an aerofoil before attempting to use the wind tunnel simulator")
@@ -209,15 +190,13 @@ class Helpers(staticmethod):
         return equilibrium_discrete_vels
     
     @jax.jit
-    def new_force(delta_vel, delta_density, current_density):
-        macro_delta_vel = Helpers.get_macro_velocities(delta_vel, current_density)
-        print("macro vel shape", macro_delta_vel.shape)
-        delta_x_momentum = jnp.sum(macro_delta_vel[:, :, 0]*delta_density[:, :]*(delta_x**3))
+    def new_force(delta_vel, delta_density):
+        #should probably be done better since diving by density then multiplying
+        momentum_density = jnp.einsum('NMQ,dQ->NMd', delta_vel, LATTICE_VELS)
         
-        delta_y_momentum = jnp.sum(macro_delta_vel[:, :, 1]*delta_density[:, :]*(delta_x**3))
-        #force = delta_momentum / 1 (as across 1 timestep)
-    
-        
+        delta_x_momentum = jnp.sum(momentum_density[:, :, 0]*delta_density[:, :]*delta_x**3)
+        delta_y_momentum = jnp.sum(momentum_density[:, :, 1]*delta_density[:, :]*delta_x**3)
+        #force = delta_momentum / 1 (as across 1 timestep)        
         return delta_x_momentum, delta_y_momentum
     
     
@@ -287,6 +266,7 @@ def update(discrete_vels_prev):
     # 2. Compute Macroscopic Quantities (density and velocities)
     density_prev = Helpers.get_density(discrete_vels_prev)
     macro_vels_prev = Helpers.get_macro_velocities(discrete_vels_prev, density_prev)
+    
     # 3. Apply inflow stuff by Zou/He  (Dirichlet BC)
     macro_vels_prev = macro_vels_prev.at[0, 1:-1, :].set(velocity_profile[0, 1:-1, :])
     #maths according to Zou/He
@@ -294,51 +274,38 @@ def update(discrete_vels_prev):
     
     # 4. calc the discrete equilibria velocities
     equilibrium_discrete_vels = Helpers.get_equilibrium_velocities(macro_vels_prev, density_prev)
-    
     #more Zou/He
     discrete_vels_prev = discrete_vels_prev.at[0, :, RIGHT_VELS].set(equilibrium_discrete_vels[0, :, RIGHT_VELS])
     
     # 5. BGK collisions
     # fᵢ ← fᵢ − ω (fᵢ − fᵢᵉ)
-    discrete_vels_post_collisions = discrete_vels_prev - RELAXATION_OMEGA * (discrete_vels_prev - equilibrium_discrete_vels)
-
+    discrete_vels_post_collisions = discrete_vels_prev - RELAXATION_NUMBER * (discrete_vels_prev - equilibrium_discrete_vels)
     discrete_vels_post_bounceback = discrete_vels_post_collisions
+    
     # 6. bounce-back (for no-slip on interior boundary)
-
     pre_bounceback_density = Helpers.get_density(discrete_vels_post_collisions)
     for i in range(N_DISCRETE_VELOCITIES):
         discrete_vels_post_bounceback = discrete_vels_post_bounceback.at[aerofoil[0, :], aerofoil[1, :], LATTICE_INDICES[i]].set(discrete_vels_prev[aerofoil[0, :], aerofoil[1, :], OPPOSITE_LATTICE_INDICES[i]])
-
     post_bounceback_density = Helpers.get_density(discrete_vels_post_bounceback)
     #delta v due to momentum exchange
     delta_vel = discrete_vels_post_bounceback - discrete_vels_post_collisions
     #delta density due to momentum exchange
     delta_density = post_bounceback_density - pre_bounceback_density
     
-    #slip on top and bottom walls (i.e. any vertical velocity is converted to horizontal.)
-    #need some paper for this.
-    # 8->1, 4->0, 7->3 => bottom wall
-    # 2->0, 6->3, 5->1 => top wall
-    #^^doesnt work :(
-        #^^ causes MAJOR instabilities, basically instantly does the 'cold blu-tac stretching' thing
     
     # 7. streaming along lattice vels
     discrete_vels_streamed = discrete_vels_post_bounceback
     for i in range(N_DISCRETE_VELOCITIES):
-        #e.g. velocity going diagonally down and right goes to the cell which is diagonally down and right from where it was
-        #etc. for all 9 (8 going outwards) velocities
         discrete_vels_streamed = discrete_vels_streamed.at[:, :, i].set(
             jnp.roll(
             jnp.roll(
                 discrete_vels_post_bounceback[:, :, i], LATTICE_VELS[0, i], axis = 0), LATTICE_VELS[1, i], axis = 1
                     )
                     )
-    #discrete_vels_streamed = discrete_vels_streamed.at[:, 0, BOTTOM_VELS].set((discrete_vels_prev[:, 0, ])*DIAG_COEF)
-    #discrete_vels_streamed = discrete_vels_streamed.at[:, -1, TOP_VELS].set(0)
     return discrete_vels_streamed, delta_density, delta_vel
 
 
-def LBM_setup(screen, aerofoil_name):
+def LBM_setup(aerofoil_name):
     """
     #SETUP
     kinematic_viscosity = (MAX_HORIZONTAL_INFLOW_VEL) / REYNOLDS   #NOTE: 10 is radius, but an aerofoil doesnt have a radius, so not sure how that works
@@ -347,6 +314,9 @@ def LBM_setup(screen, aerofoil_name):
     #changed from + 0.5
     relaxation_factor = 1 / (3 * kinematic_viscosity + 2/3+1/16) #looks like strange number to add. Its been tested as good for stability
     """
+    # *******************************
+    ######## variables = get_variables()
+    # *******************************
     
     #velocity profile
     global velocity_profile
@@ -356,18 +326,26 @@ def LBM_setup(screen, aerofoil_name):
     global discrete_vels_prev
     discrete_vels_prev = Helpers.get_equilibrium_velocities(velocity_profile, jnp.ones((N_POINTS_X, N_POINTS_Y)))
     
-    global aerofoil, ob_mask
-    ob_mask = Helpers.load_aerofoil(aerofoil_name)
-    #need to get list of coords from this.
-    if  not jnp.array_equal(ob_mask, jnp.zeros((SCREEN_WIDTH, SCREEN_HEIGHT))):
-        indexes = jnp.where(ob_mask == 1)
-        aerofoil = jnp.array(indexes[:])
-        #i think ^^ not working: unrelated error showed that aerofoil in update loop was [] (i.e. empty which would be why no render)
+    if aerofoil_name == "jet":
+        #***********************
+        pass
+    elif aerofoil_name == "prop":
+        #***********************
+        pass
     else:
-        aerofoil = []
-        print("aerofoil is None")
+        #loading the aerofoil shape from file
+        global aerofoil, ob_mask
+        aerofoil = jnp.array([])
+        ob_mask = jnp.array([])
+        ob_mask = Helpers.load_aerofoil(aerofoil_name)
+        #if no aerofoil with that name exists - done for performance reasons
+        if  not jnp.array_equal(ob_mask, jnp.zeros((SCREEN_WIDTH, SCREEN_HEIGHT))):
+            aerofoil = jnp.array(jnp.where(ob_mask == 1))
+        else:
+            aerofoil = []
+            print("aerofoil is None")
 
-    #initialises an array whicih holds RGB val for every pixel in window
+    #initialises an array which holds RGB val for every pixel in window
     global colours
     colours = jnp.zeros((SCREEN_WIDTH, SCREEN_HEIGHT, 3), dtype=jnp.uint8)
     
@@ -380,27 +358,27 @@ def LBM_main_loop(screen, iteration, render_type):
     if screen !=None:
         screen.fill("black")
 
+    #moving to next time-step
     global discrete_vels_prev, frame_count
     discrete_vels_next, delta_density, delta_vel = update(discrete_vels_prev)
     
+    #force plotting
+    if iteration % 25 == 0 and iteration > 500:
+        hori_force, vert_force = Helpers.new_force(delta_vel, delta_density)
+        print(f"iteration {iteration} - horizontal force: {hori_force}, vertical force: {vert_force}")
+        update_graphs(it_count = iteration, lift_item=vert_force, drag_item=hori_force)
+    
+    
+    #drawing the simulation
     discrete_vels_prev = discrete_vels_next
     density = Helpers.get_density(discrete_vels_next)
     macro_vels = Helpers.get_macro_velocities(discrete_vels_next, density)
     vel_magnitude = jnp.linalg.norm(macro_vels, axis = -1, ord = 2)
-    
-    if iteration % 25 == 0 and iteration > 500:
-
-        #tests
-        hori_force, vert_force = Helpers.new_force(delta_vel, delta_density, density)
-        #need to calc total strain rates FD and LB
-        #then find difference
-        update_graphs(it_count = iteration, lift_item=vert_force, drag_item=hori_force)
-    
-    
     d_u__d_x, d_u__d_y = jnp.gradient(macro_vels[..., 0])
     d_v__d_x, d_v__d_y = jnp.gradient(macro_vels[..., 1])
     curl = d_u__d_y - d_v__d_x
     render(screen, vel_magnitude, density, curl, render_type)
+    
     iteration += 1
     return iteration
 

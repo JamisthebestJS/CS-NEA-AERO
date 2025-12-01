@@ -66,3 +66,42 @@ PROC render_scrollable_list(items:ARRAY, scroll_y: INT):
             text = FONT(item, colour)
             DRAW(text, (item_rect.x + text_x_pad, item_rect.y + text_y_pad))
 END PROC
+
+
+
+
+
+
+
+
+"""
+Flood fill start point finder
+
+1	Find the bottom-most point in the aerofoil perimeter
+2	Find the 2 adjacent point to this point
+3	Find the vector which goes from one to the other adjacent point
+4	Find the perpendicular midpoint bisector of this vector
+5	Clamp this vector to the 8 cardinal directions to limit vector length
+6	Add the clamped vector to the bottom-most node to get the start-point
+"""
+
+FUNC flood_fill_start_finder(save_path: ARRAY):
+    lowest_point = (10000, 10000)
+    FOR i=0 to LEN(save_path):
+        point = save_path[i]
+        if point[1] < lowest[1]:
+            lowest = point
+    
+    index = save_path.index(lowest)
+    left_point = save_path[index-1]
+    right_point = save_path[index+1]
+
+    vector = (left_point[0]-right_point[0], left_point[1]-right_point[1])
+    normal_vector = (-vector[1], vector[0])
+
+    cardinal_direction = (INT(clamp(normal_vector[0]), -1, 1), INT(clamp(normal_vector[1]), -1, 1))
+
+    start_point = (lowest[0] + cardinal_direction[0], lowest[1] + cardinal_direction[1])
+
+    RETURN start_point
+END FUNC

@@ -1,8 +1,7 @@
 import pygame
 import numpy as np
 from helpers.queue import Queue
-from helpers.menus.aero_menu import s_menu, sidebar_btns
-import math
+from helpers.aerofoil_save_funcs import s_menu
 
 
 
@@ -15,14 +14,16 @@ MAX_VERTEX_COUNT = 30
 
 
 class CatmullRom(staticmethod):
-    points = []
+    control_points = []
     path = np.array([])
 
     @staticmethod
+    #calculates q(t) from t for both x and y directions and returns (q_x(t), q_y(t))
     def catmull_rom(p0, p1, p2, p3, t):
         a0 = []
         a1 = []
         a2 = []
+        #calculates t coefficients
         for i in range(2):
             a0.append(-0.5 * p0[i] + 1.5 * p1[i] - 1.5 * p2[i] + 0.5 * p3[i])
             a1.append(p0[i] - 2.5 * p1[i] + 2 * p2[i] - 0.5 * p3[i])
@@ -34,22 +35,24 @@ class CatmullRom(staticmethod):
         return point
     
     @staticmethod
-    def catmull_rom_path(resolution):
-        n = len(CatmullRom.points)
+    #creates a list of points (each one a pixel) between P0 and Pn which creates the spline
+    def catmull_rom_path():
+        n = len(CatmullRom.control_points)
+        #uses points twice when on extreme ends of spline (for P0, P1 and Pn-1, Pn)
         for i in range(n-1):
-            p0 = CatmullRom.points[i - 1] if i > 0 else CatmullRom.points[i]
-            p1 = CatmullRom.points[i]
-            p2 = CatmullRom.points[i + 1]
-            p3 = CatmullRom.points[i + 2] if i + 2 < n else CatmullRom.points[i + 1]
-            for j in range(resolution):
-                t = j / resolution
-                #if i < n - 1 or j == 0:
+            p0 = CatmullRom.control_points[i - 1] if i > 0 else CatmullRom.control_points[i]
+            p1 = CatmullRom.control_points[i]
+            p2 = CatmullRom.control_points[i + 1]
+            p3 = CatmullRom.control_points[i + 2] if i + 2 < n else CatmullRom.control_points[i + 1]
+            for j in range(CAT_ROM_DEF):
+                t = j / CAT_ROM_DEF
+                #if i < n - 1 or j == 0: #TODO WHY THIS HERE????
                 CatmullRom.path.append(CatmullRom.catmull_rom(p0, p1, p2, p3, t))
             
-        #trying to get first to join to last point
-        for j in range(resolution):
-            t = j / resolution
-            CatmullRom.path.append(CatmullRom.catmull_rom(CatmullRom.points[-2], CatmullRom.points[-1], CatmullRom.points[0], CatmullRom.points[1], t))
+        #first point joins to last point
+        for j in range(CAT_ROM_DEF):
+            t = j / CAT_ROM_DEF
+            CatmullRom.path.append(CatmullRom.catmull_rom(CatmullRom.control_points[-2], CatmullRom.control_points[-1], CatmullRom.control_points[0], CatmullRom.control_points[1], t))
     
     @staticmethod
     def render_path(screen):
@@ -61,43 +64,46 @@ class CatmullRom(staticmethod):
 
     @staticmethod
     def del_point(vertex_pos):
-        CatmullRom.points.remove(vertex_pos)
-        CatmullRom.new_path(CAT_ROM_DEF)
+        CatmullRom.control_points.remove(vertex_pos)
+        CatmullRom.new_path()
     
     @staticmethod
     def move_points(old_pos, new_pos):
         #find old pos in points list and replace with new pos
-        for i in range(len(CatmullRom.points)):
-            if CatmullRom.points[i] == old_pos:
-                CatmullRom.points[i] = new_pos
+        for i in range(len(CatmullRom.control_points)):
+            if CatmullRom.control_points[i] == old_pos:
+                CatmullRom.control_points[i] = new_pos
 
-        CatmullRom.new_path(CAT_ROM_DEF)
+        CatmullRom.new_path()
     
     @staticmethod
     def new_point(vertex_pos):
-        CatmullRom.points.append(vertex_pos)
+        CatmullRom.control_points.append(vertex_pos)
         #clear path and recalculate
-        CatmullRom.new_path(CAT_ROM_DEF)
+        CatmullRom.new_path()
     
     
     @staticmethod
-    def new_path(definition):
+    def new_path():
         CatmullRom.path = []
-        if len(CatmullRom.points) > 1:
-            CatmullRom.catmull_rom_path(definition)
+        if len(CatmullRom.control_points) > 1:
+            CatmullRom.catmull_rom_path()
 
     @staticmethod
     def clear_path():
         CatmullRom.path = []
-        CatmullRom.points = []
+        CatmullRom.control_points = []
+
 
 class Modes(staticmethod):
     current_mode = ""
         
     @staticmethod
-    def clear_all():
-        Vertex.vertices = []
+    def clear_all(screen):
+        screen.fill((0,0,0))
+        VertexListOperations.vertices = []
         CatmullRom.clear_path()
+        return screen
 
     @staticmethod
     def place_vertex(x, y):
@@ -113,7 +119,7 @@ class Modes(staticmethod):
 
     @staticmethod
     def delete_vertex(vertex_x, vertex_y):
-        ver_id = VertexListOperations.get_vertex_ID(vertex_x, vertex_y)
+        ver_id = VertexListOperations.get_vertex_ID_at_pos(vertex_x, vertex_y)
         #prints whether vertex found or not (and so deleted or not)
         if ver_id != -1:
             vertex = VertexListOperations.get_vertex(ver_id)
@@ -157,95 +163,19 @@ class Modes(staticmethod):
         #make a true/false mask of outline
         
         object_mask = np.zeros((SIM_HEIGHT, SIM_HEIGHT))
-        old_object_mask = np.zeros((SIM_HEIGHT, SIM_HEIGHT))
         for i in save_path:
-            object_mask[i[0], i[1]] = True
-            old_object_mask[i[0], i[1]] = True
+            object_mask[i[1], i[0]] = True #aerofoil needs to be rotated because of the way saving works, each file row is each aerofoil column, but reading, it is 'correct
         
-        #need to somehow choose a random point in the aerofoil to begin BFS flood-fill
-        #Take top and bottom nodes
-        #get vector AB btwn them
-        """
-        get unit vector of AB
-        make the smallest component =1 by multiplying unitAB by a coefficient
-        round the other component
-        add this repeatedly to A until a non-node is found, or you go past B
-        If you go past B, repeat with left and right most nodes
-        if this also fails, then no flood-fill algo
-        """
-        #first: finding the top and bottom, left and right -most extreme nodes.
-        right = (1000, 0)
-        left = (-1, 0)
-        bottom = (0, -1)
-        top = (0, 1000)
-        for point in (save_path):
-            if point[0] < right[0]:
-                right = point
-            elif point[0] > left[0]:
-                left = point
-            
-            if point[1] < top[1]:
-                top = point
-            elif point[1] > bottom[1]:
-                bottom = point
+        x, y = Toolbox.find_flood_start(save_path)
+        print("flood start", x, y)
+        object_mask = Toolbox.flood_fill(x, y, object_mask, 1, Queue())
         
-        #vector maths to get discretised direction vector
-        TB_vec = tuple(x-y for x, y in zip(bottom, top))
-        TB_vec_mag = math.sqrt(TB_vec[0]**2 + TB_vec[1]**2)
-        
-        n_TB_vec = (TB_vec[0] / TB_vec_mag, TB_vec[1] / TB_vec_mag)
-        discrete_dir_vec = n_TB_vec
-        
-        small_comp = min(discrete_dir_vec[0], discrete_dir_vec[1])
-        coef = 1/small_comp
-        
-        discrete_dir_vec = (int(discrete_dir_vec[0]*coef), int(discrete_dir_vec[1]*coef))
-        
-        discrete_dir_vec_mag = math.sqrt(discrete_dir_vec[0]**2 + discrete_dir_vec[1]**2)
-        
-        #repeatedly adds dir vec to bottom and checks if it lands on a non-boundary node (i.e. is inside)
-        x, y = -1, -1
-        for i in range(int(TB_vec_mag//discrete_dir_vec_mag)):
-            check_point = tuple(x+y for x, y in zip(bottom, discrete_dir_vec))
-            
-            if object_mask[check_point[0]][check_point[1]] == False:
-                x = check_point[0]
-                y = check_point[1]
-                break
-        
-        #do left to right check if cant find valid start point in the bottom to top check
-        if x == -1:
-            LR_vec = tuple(x-y for x, y in zip(right, left))
-            LR_vec_mag = math.sqrt(LR_vec[0]**2 + LR_vec[1]**2)
-            
-            n_LR_vec = (LR_vec[0] / LR_vec_mag, LR_vec[1] / LR_vec_mag)
-            discrete_dir_vec = n_LR_vec
-            
-            small_comp = min(LR_vec[0], LR_vec[1])
-            coef = 1/small_comp
-            
-            discrete_dir_vec = (int(discrete_dir_vec[0]*coef), int(discrete_dir_vec[1]*coef))
-            
-            discrete_dir_vec_mag = math.sqrt(LR_vec[0]**2 + LR_vec[1]**2)
-
-            for i in range(int(LR_vec_mag//discrete_dir_vec_mag)):
-                check_point = tuple(x+y for x, y in zip(left, discrete_dir_vec))
-                
-                if object_mask[check_point[0]][check_point[1]] == False:
-                    x = check_point[0]
-                    y = check_point[1]
-                    break
-        
-        #if valid start pos found
-        if x != -1 and y != -1:
-            print(f"starting flood-fill at {x, y}")
-            Toolbox.flood_fill(x=x, y=y, image=object_mask, new_colour=1, queue=Queue())
-        
+        #small error check - if has filled all 4 corners, likely picked wrong spot for flood fill start - NOT el-wise ob_mask
+        print("corner vals:", object_mask[0,0], object_mask[0,-1], object_mask[-1,0], object_mask[-1,-1])
+        if object_mask[0,0] == 1 and object_mask[0,-1] == 1 and object_mask[-1, 0] == 1 and object_mask[-1,-1] == 1:
+            object_mask = np.logical_not(object_mask)
         
         s_menu(object_mask, screen, font)
-        s_menu(old_object_mask, screen, font)
-        
-        
         
     @staticmethod
     def set_mode(new_mode):
@@ -255,27 +185,91 @@ class Modes(staticmethod):
     def get_mode():
         return Modes.current_mode
 
-class Menus(staticmethod):
-    current_menu = ""
+
+
+class Toolbox(staticmethod):
+    @staticmethod
+    def snap_to_grid(coord):
+        snapped_x = round(coord[0])
+        snapped_y = round(coord[1])
+        return snapped_x, snapped_y
     
-    def get_open_menu():
-        return Menus.current_menu
+    @staticmethod 
+    def flood_fill(x, y, image, new_colour, queue):
+        old_colour = image[x, y]
+        print("old colour", old_colour)
+        
+        if old_colour == new_colour:
+            return image
+        
+        queue.enqueue((x, y))
+        directions = [(1,0), (-1,0), (0,1), (0,-1)]
+        image[x, y] = new_colour
+        
+        queue_count = 0
+        print(f"im width ={len(image)}, im hieght={len(image[0])}")
+        
+        while queue.is_empty() == False:
+            x, y = queue.dequeue()
+            
+            for dx, dy in directions:
+                queue_count+=1
+                nx = x+dx
+                ny = y+dy
+                
+                if 0 <= nx < len(image) and 0 <= ny < len(image[0]) and image[nx, ny] == old_colour:
+                    image[nx, ny] = new_colour
+                    queue.enqueue((nx, ny))
+        
+        print("flood-fill finished after filling", queue_count, "nodes")
+        
+        return image
     
-    def open_menu(menu):
-        Menus.current_menu = menu
+    @staticmethod
+    def find_flood_start(save_path):
+        
+    #1	Find the bottom-most point in the aerofoil perimeter
+    #2	Find the 2 adjacent point to this point
+    #3	Find the vector which goes from one to the other adjacent point
+    #4	Find the perpendicular bisector of this vector
+    #5	Clamp this vector to the 8 cardinal directions to limit vector length
+    #6	Add the clamped vector to the bottom-most node to get the start-point
+
+        
+        
+        #1.
+        lowest = (1000,1000)
+        for point in save_path:
+            if point[1] < lowest[1]:
+                lowest = point
+        
+        #2.
+        lowest_index = save_path.index(lowest)
+        left_adj_point = save_path[lowest_index-1]
+        right_adj_point = save_path[lowest_index+1]
+        
+        #3.
+        vector = (left_adj_point[0]-right_adj_point[0], left_adj_point[1]-right_adj_point[1])
+        
+        #4.
+        normal_vector = (-vector[1], vector[0])
+        
+        #5.
+        card_dir_vec = (round(Toolbox.clamp(normal_vector[0], -1, 1)), round(Toolbox.clamp(normal_vector[1], -1, 1)))
+        print("card dir vec", card_dir_vec)
+        print("loweest", lowest)
+        
+        x = lowest[0] + card_dir_vec[0]
+        y = lowest[1] + card_dir_vec[1]
+        
+        print("x, y", x, y)
+        
+        return x,y
     
-    def render_aerofoil_menu():
-        pass
-        #renders the aerofoil selection/save/edit/etc. menu
-    
-    def render_sidebar():
-        pass
-        #renders sidebar buttons which can be clicked
-    
-    def menu_selection(x, y):
-        pass
-        #takes where the mouse has clicked and determines whether you have clicked a button and if so, does what it should do
-    
+    @staticmethod
+    def clamp(val, min, max):
+        return max if val > max else min if val < min else val
+
     
 MODE_DICT = {
     "new": Modes.place_vertex,
@@ -297,7 +291,7 @@ class VertexListOperations(object):
     @staticmethod
     def get_vertex(index):
         for i in VertexListOperations.vertices:
-            if i.ID == index:
+            if i.get_id() == index:
                 return i
     
     @staticmethod
@@ -306,7 +300,7 @@ class VertexListOperations(object):
     
     @staticmethod
     def del_from_vertices_list(x, y):
-        id = VertexListOperations.get_vertex_ID(x, y)
+        id = VertexListOperations.get_vertex_ID_at_pos(x, y)
         if id != -1:
             if len(VertexListOperations.vertices) < 1:
                 print("no vertex to delete from VertexListOperations.vertices")
@@ -325,53 +319,16 @@ class VertexListOperations(object):
         VertexListOperations.vertices.append(vertex)
         
     @staticmethod
-    def get_vertex_ID(check_x, check_y):
+    def get_vertex_ID_at_pos(check_x, check_y):
         for i in range(VertexListOperations.get_vertices_list_length()):
             vertex = VertexListOperations.vertices[i]
             
             #if within radius of click (5 pixels) (using circle stuff)
             if (vertex.x - check_x) ** 2 + (vertex.y - check_y) ** 2 <= 5 ** 2:
-                return vertex.ID
+                return vertex.get_id()
         
         return -1 #if not in vertex list
 
-
-
-#do i need this class? idk rn, we'll see
-class Toolbox(staticmethod):
-    @staticmethod
-    def snap_to_grid(coord):
-        snapped_x = round(coord[0])
-        snapped_y = round(coord[1])
-        return snapped_x, snapped_y
-    
-    @staticmethod 
-    def flood_fill(x, y, image, new_colour, queue):
-        old_colour = image[x, y]
-        print("olf colour", old_colour)
-        
-        if old_colour == new_colour:
-            return image
-        
-        queue.enqueue((x, y))
-        directions = [(1,0), (-1,0), (0,1), (0,-1)]
-        image[x, y] = new_colour
-        
-        queue_count = 0
-        while queue.is_empty() == False:
-            x, y = queue.dequeue()
-            
-            for dx, dy in directions:
-                queue_count+=1
-                nx = x+dx
-                ny = y+dy
-                
-                if 0 <= nx < len(image) and 0 <= ny < len(image[0])\
-                    and image[nx, ny] == old_colour:
-                    image[nx, ny] = new_colour
-                    queue.enqueue((nx, ny))
-        print("flood-fill finished after filling", queue_count, "nodes")
-    
 #Vertex class
 #may need to split into stuff about the list (static) and actual vertices (nonstatic)
 class Vertex(object):
@@ -379,15 +336,15 @@ class Vertex(object):
     def __init__(self, x, y):
         self.x = x
         self.y = y
-        self.ID = Vertex.id_counter
+        self._ID = Vertex.id_counter
         Vertex.id_counter += 1
         VertexListOperations.append_vertices_list(self)
     
     def get_pos(self):
         return (self.x, self.y)
     
-    def get_old_pos(self):
-        return (self.old_x, self.old_y)
+    def get_id(self):
+        return self._ID
     
     def update_pos(self, new_x, new_y):
         self.x = new_x
@@ -411,9 +368,7 @@ def p_main(screen, event, font):
         running = False
         pygame.quit()
     
-    #SIDEBAR WAY OF CHANGING MODES
     mode = Modes.get_mode()
-    mode, screen = sidebar_btns(screen, mode, font)
     
     
     #CHANGING MODES
@@ -446,7 +401,7 @@ def p_main(screen, event, font):
                 MODE_DICT[mode](mouse_x, mouse_y)
             
             elif mode == "clear":
-                MODE_DICT[mode]()
+                screen = MODE_DICT[mode](screen)
             
             elif mode == "save":
                 MODE_DICT[mode](screen, font)
@@ -454,7 +409,7 @@ def p_main(screen, event, font):
     
         # Track mouse drag: store position on press, compare on release
             if Modes.get_mode() == "move":
-                dragged_vertex_ID = VertexListOperations.get_vertex_ID(mouse_x, mouse_y)
+                dragged_vertex_ID = VertexListOperations.get_vertex_ID_at_pos(mouse_x, mouse_y)
                 if dragged_vertex_ID != -1:
                     drag_start_pos = event.pos
                     dragging = True
