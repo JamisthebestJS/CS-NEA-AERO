@@ -105,3 +105,53 @@ FUNC flood_fill_start_finder(save_path: ARRAY):
 
     RETURN start_point
 END FUNC
+
+
+
+
+
+"""
+catmull rom spline path calculator
+"""
+PROC catmull_rom_path_calc(CR_points, resolution):
+    length = LEN(CR_points)
+    FOR i=0 TO length-1:
+        IF i > 0 THEN:
+            p0 = CR_points[i-1]
+        ELSE:
+            p0 = CR_points[i]
+        END IF
+        p1 = CR_points[i]
+        p2 = CR_points[i+1]
+        IF i+2 < length:
+            p3 = CR_points[i+2]
+        ELSE:
+            p3 = CR_points[i+1]
+        END IF
+
+        FOR j=0 TO resolution:
+            t = j / resolution
+            CR_path.append(catmull_rom_point_calc(p0, p1, p2, p3, t))
+
+    FOR i=0 TO resolution:
+        t = j / resolution
+        CR_path.append(catmull_rom_point_calc(CR_points[-2], CR_points[-1], CR_points[0], CR_points[1]))
+END PROC
+
+
+
+FUNC catmull_rom_point_calc(p0, p1, p2, p3, t):
+    a0s = []
+    a1s = []
+    a2s = []
+
+    FOR i=0 to 2:
+        a0s.append(-0.5 * p0[i] + 1.5 * p1[i] - 1.5 * p2[i] + 0.5 * p3[i])
+        a1s.append(p0[i] - 2.5 * p1[i] + 2 * p2[i] - 0.5 * p3[i])
+        a2s.append(-0.5 * p0[i] + 0.5 * p2[i])
+    a3s = p1
+    point = []
+    FOR i=0 TO 2:
+        point.append(((a0[i] * t + a1[i]) * t + a2[i]) * t + a3[i])
+    RETURN point
+END FUNC
