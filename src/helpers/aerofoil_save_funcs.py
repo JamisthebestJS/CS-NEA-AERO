@@ -6,7 +6,7 @@ import pygame
 BTN_COLOUR = (60,220,80)
 SB_BTN_COLOUR = (220, 60, 80)
 
-def s_menu(aerofoil, screen, font):
+def save_menu(aerofoil, screen, font):
     width, height = screen.get_size()
     
     choosing = True
