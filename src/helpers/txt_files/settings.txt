@@ -1,0 +1,6 @@
+aerofoil_count = 40
+temperature = 20
+altitude = 12200
+density = 1.2
+sim_scale = 5
+inflow_velocity = 30

@@ -48,7 +48,7 @@ def save_menu(aerofoil, screen, font):
 
 def save(aerofoil):
     #open stats file (to see how many aerofoils exist)
-    stats_file = open("helpers\\txt_files\stats.txt", "r")
+    stats_file = open("helpers\\txt_files\settings.txt", "r")
     stats_content = []
     all_content = []
     
@@ -63,7 +63,7 @@ def save(aerofoil):
     new_aerofoil_count = str(int(aerofoil_count) + 1) #keeps a record of how many aerofoils so has a default name for the aerofoils as they are saved.
     #writes new aerofoil count into the file
     all_content[0] = "aerofoil_count = " + str(new_aerofoil_count)
-    with open("stats.txt", "w") as file:
+    with open("settings.txt", "w") as file:
         for line in all_content:
             file.write(line)
             

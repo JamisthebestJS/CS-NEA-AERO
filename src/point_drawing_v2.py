@@ -20,7 +20,7 @@ class CatmullRom(object):
         self.path = path
 
     #calculates q(t) from t for both x and y directions and returns (q_x(t), q_y(t))
-    def catmull_rom_point_calc(p0, p1, p2, p3, t):
+    def catmull_rom_point_calc(self, p0, p1, p2, p3, t):
         a0 = []
         a1 = []
         a2 = []
@@ -36,7 +36,7 @@ class CatmullRom(object):
         return point
     
     #creates a list of points (each one a pixel) between P0 and Pn which creates the spline
-    def catmull_rom_path_calc():
+    def catmull_rom_path_calc(self, ):
         n = len(self.control_points)
         #uses points twice when on extreme ends of spline (for P0, P1 and Pn-1, Pn)
         for i in range(n-1):
@@ -54,18 +54,18 @@ class CatmullRom(object):
             t = j / CAT_ROM_DEF
             self.path.append(self.catmull_rom(self.control_points[-2], self.control_points[-1], self.control_points[0], self.control_points[1], t))
     
-    def render_path(screen):
+    def render_path(self, screen):
         for point in self.path:
             pygame.draw.circle(screen, (255, 255, 255), (int((point[0] + 1)), int((point[1] + 1))), 1)
     
     def get_path():
         return self.path
 
-    def del_point(vertex_position):
+    def del_point(self, vertex_position):
         self.control_points.remove(vertex_position)
         self.new_path()
     
-    def move_points(old_position, new_position):
+    def move_points(self, old_position, new_position):
         #find old pos in points list and replace with new pos
         for i in range(len(self.control_points)):
             if self.control_points[i] == old_position:
@@ -384,7 +384,7 @@ def p_main(screen, event, font):
     #IF MOUSE CLICK
     if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             # Mouse button 1 (left click) has been pressed
-            mouse_position = Toolbox.snap_to_grid(pygame.mouse.get_position())
+            mouse_position = Toolbox.snap_to_grid(pygame.mouse.get_pos())
             print(f"Left click at ({mouse_position[0]}, {mouse_position[1]})")
             
             if mode == "delete" or mode == "new":

@@ -2,9 +2,11 @@
 import pygame
 import os
 from helpers.sort import insertion_sort
-
+from helpers.validation import validation_dict
+from helpers.saving_settings import save_settings, load_settings
 
 BTN_COLOUR = (60,220,80)
+ACTIVE_BTN_COLOUR = (220,80,60)
 # List items
 
 # Scroll variables
@@ -20,7 +22,7 @@ FRACTION = 1/9
 def construct_menus(screen, big_font, med_font, small_font):
     
     #main LBM menu
-    branches = ["aero_menu", "prop_or_jet", "sim_settings"]
+    branches = ["aero_menu", "prop_or_jet", "settings"]
     btn_texts = ["Aerofoil", "Thrust Engine", "Simulation Settings"]
     menu_type = "LBM_main"
     main_LBM_menu = MiscMenu(screen, big_font, med_font, menu_type, btn_texts, branches = branches, title = "Simulations", )
@@ -37,11 +39,14 @@ def construct_menus(screen, big_font, med_font, small_font):
     
     
     #sim settings menu
-    setting_titles = []
-    setting_defaults = []
-    menu_type = "sim_settings"
+    setting_titles = ["temperature(C): ", "altitude(m): ", "density(kg/m³): ", "sim width(m): ", "max velocity(m/s): "]
+    setting_tags = ["temperature", "altitude", "density", "sim_scale", "inflow_velocity"]
+    setting_defaults = load_settings(setting_tags)
+    if setting_defaults == [0,0,0,0,0]:
+        setting_defaults = ["20", "12200", "1.2", "5", "30"]
+    menu_type = "settings"
     settings_menu = SettingsMenu(screen, big_font, small_font, menu_type, setting_titles, 
-                                 setting_defaults, title = "Simulation Settings", )
+                                 setting_defaults, setting_tags, title = "Simulation Settings", )
     
     
     #main menu
@@ -55,7 +60,7 @@ def construct_menus(screen, big_font, med_font, small_font):
     "LBM_main": main_LBM_menu,
     "aero_menu": aero_list,
     "prop_or_jet": prop_or_jet_menu,
-    "sim_settings": settings_menu,
+    "settings": settings_menu,
     
     }
     return menus_dict
@@ -80,8 +85,8 @@ class Menu(object):
         
     def controller(self, event, ):
         self.screen = self.render()
-        self.type = self.do_input(event, )
-        return str(self.type), self.screen
+        new_type = self.do_input(event, )
+        return str(new_type), self.screen
 
 
 
@@ -89,38 +94,102 @@ class Menu(object):
 #Subclasses
 #need to think on this one a bit.
 class SettingsMenu(Menu):
-    def __init__(self, screen, font, font2, type, setting_titles, setting_defaults, title):
+    def __init__(self, screen, font, font2, type, setting_titles, setting_defaults, setting_tags, title):
         super().__init__(screen, font, font2, type, )
         self.title = title
+        self.setting_titles = setting_titles
+        self.button_inputs = setting_defaults
+        self.setting_tags = setting_tags
+        self.input_rects, self.active_inputs = self.create_textboxes()
 
-    #these are hardcoded as the layout isnt really generalisable 
-    def render(self):
-        #**************
-        #temperature and altitude
-        box = pygame.Rect(self.width*1/7, self.height*3/9, self.width*2/7, self.height/9)
-        pygame.draw.rect(self.screen, BTN_COLOUR, box)
-        temp_text =  self.font2.render()
+    def main_render(self):
         
-        
-        
-        #density
-        
-        
-        
-        #inflow velocity
-        
-        
-        #simulation width
+        title_text = self.font.render(self.title, True, (255, 255, 255))
+        title_width, title_height = self.font.size(self.title)
+        self.screen.blit(title_text, ((self.width - title_width)/2, FRACTION*self.height - title_height/2))
+
+        #renders the menu layout
+        self.screen.fill((0, 0, 0))
+        x_pad = 5
+        y_pad = (self.input_rects[0].height - self.font2.size(self.setting_titles[0])[1])/2
+
+        for i in range(len(self.setting_titles)):
+            if self.active_inputs[i]:
+                colour = ACTIVE_BTN_COLOUR
+            else:
+                colour = BTN_COLOUR
+            pygame.draw.rect(self.screen, colour, (self.input_rects[i][:]))
+            textbox_text = self.font2.render(self.setting_titles[i]+self.button_inputs[i], True, (0,0,0))
+            self.screen.blit(textbox_text, (self.input_rects[i].x + x_pad, self.input_rects[i].y + y_pad))
+
         return self.screen
-    
+
+    def input_render(self, ):
+
+        
+        for i in range(len(self.button_inputs)):
+            pass 
+
+        return self.screen
 
     def do_input(self, event, ):
-        #overwriting
-        pass
+        for i in range(len(self.setting_titles)):
+            #for clicks
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                #if click on textbox, toggle active, and deactivate
+                if self.input_rects[i].collidepoint(event.pos):
+                    print("clicked on", self.setting_titles[i])
+                    if self.active_inputs[i] == False:
+                        self.active_inputs = [False]*len(self.setting_titles)
+                        self.active_inputs[i] = True
+                    else:
+                        self.active_inputs[i] = False
+
+        #for text entry
+        if event.type == pygame.KEYDOWN:
+            index = self.active_inputs.index(True)
+            
+            if event.key == pygame.K_BACKSPACE:
+                self.button_inputs[index] = self.button_inputs[index][:-1]
+            
+            elif event.key == pygame.K_RETURN:
+                print("attempting to save setting")
+                #validating input then saving to file
+                if validation_dict[self.setting_tags[index]](self.button_inputs[index]):
+                    print(f"{self.setting_titles[index]} set to {self.button_inputs[index]}")
+                    self.active_inputs[index] = False
+                    save_settings(self.setting_tags, self.button_inputs)
+            
+            else:
+                print("valid input: ", self.button_inputs[index] + event.unicode)
+                self.button_inputs[index] += event.unicode
+            
+    
+    def create_textboxes(self, ):
+        input_rects = []
+        for i in range(len(self.setting_titles)):
+            input_rects.append(pygame.Rect(self.width/14, (3+2*i)*self.height/9, self.width*5/14, self.height/9))
+        active_inputs = [False]*len(self.setting_titles)
+        #shifts density textbox to the right
+        input_rects[2].x = self.screen.get_width()*8/14
+        input_rects[2].y = self.screen.get_height()*3/9
+        #shifts sim scale textbox up
+        input_rects[3].y = self.screen.get_height()*7/9
+        #moving inflow velocity textbox back into screen and onto the right to fit
+        input_rects[4].x = self.screen.get_width()*8/14
+        input_rects[4].y = self.screen.get_height()*7/9
+        return input_rects, active_inputs
+
+    def controller(self, event, ):
+        self.screen = self.main_render()
+        self.do_input(event, )
+        self.screen = self.input_render()
+        pygame.display.flip()
+        return str(self.type), self.screen
 
 
 
-
+#TITLES NEED DOING STILL AS IN RENDERING THEM
 class ListMenu(Menu):
     def __init__(self, screen, font, font2, type, vis_size):
         super().__init__(screen, font, font2, type, )
@@ -148,12 +217,13 @@ class ListMenu(Menu):
     
     
     def do_input(self, event, items, list_height):
+        #if scrolling
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 4:
                 self.scroll_y = min(self.scroll_y + SCROLL_SPEED, 0)
             elif event.button == 5:
                 self.scroll_y = max(self.scroll_y - SCROLL_SPEED, self.screen.get_height() - list_height)
-        
+            #if left click
             elif event.button == 1:
                 item = None
                 mouse_x, mouse_y = pygame.mouse.get_pos()
@@ -171,7 +241,6 @@ class ListMenu(Menu):
         if aerofoils_list != None:
             items = insertion_sort(aerofoils_list)
             list_height = len(items) * self.item_height
-            
             menu_type = self.do_input(event, items, list_height)
             self.screen = self.render(items, )
         if menu_type != None:

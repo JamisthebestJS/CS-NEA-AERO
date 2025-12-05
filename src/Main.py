@@ -1,4 +1,3 @@
-
 import pygame
 from point_drawing_v2 import p_main
 from LBM_v2 import LBM_setup, LBM_main_loop
@@ -67,7 +66,6 @@ def main(screen):
                 running = False
                 quit()
             
-
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     running, iteration, menu_type, screen = go_to_main_menu()
