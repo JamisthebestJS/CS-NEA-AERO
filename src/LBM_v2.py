@@ -47,6 +47,8 @@ from pathlib import Path
 import jax.numpy as jnp
 import jax
 from helpers.graphs import update_graphs
+from helpers.saving_settings import load_settings
+from helpers.unit_conversions import Conversions
 
 global aerofoil, render_aerofoil
 aerofoil = []
@@ -62,12 +64,6 @@ frame_count = 0
 N_POINTS_X = 600
 N_POINTS_Y = 300
 
-screen_width_L = 100 #(m)
-delta_x = screen_width_L/N_POINTS_X
-
-delta_t = 0.1 #(s), length of timestep in seconds
-
-
 SCREEN_HEIGHT = N_POINTS_Y
 SCREEN_WIDTH = N_POINTS_X 
 AEROFOIL_OFFSET = SCREEN_WIDTH//8
@@ -77,10 +73,8 @@ MAX_RENDERED_VAL = 0.16
 MAX_RENDERED_DENSITY = 4
 MAX_RENDERED_VORT = 0.00833
 
-
-
 MAX_HORIZONTAL_INFLOW_VEL = 0.05
-horizontal_inflow_V = 100 #(m/s)
+
 
 #these need changing up for unit conversions
 DIAG_COEF = 0.70711
@@ -349,6 +343,19 @@ def LBM_setup(aerofoil_name):
     global colours
     colours = jnp.zeros((SCREEN_WIDTH, SCREEN_HEIGHT, 3), dtype=jnp.uint8)
     
+    #loading settings from file
+    setting_tags = ["density", "temperature", "altitude", "sim_scale", "inflow_velocity"]
+    global setting_values
+    setting_values = load_settings(setting_tags)
+    global converters
+    converters = Conversions(
+        SI_velocity = float(setting_values[setting_tags.index("inflow_velocity")]),
+        SI_density = float(setting_values[setting_tags.index("density")]),
+        average_sim_density = Helpers.get_density(jnp.full((N_POINTS_X, N_POINTS_Y, N_DISCRETE_VELOCITIES),MAX_HORIZONTAL_INFLOW_VEL)).mean()
+
+   )
+    global delta_x
+    delta_x = converters.SI_to_sim_length(float(setting_values[setting_tags.index("sim_scale")])) / N_POINTS_X
     print("finished setup")
     return True
 
@@ -362,11 +369,14 @@ def LBM_main_loop(screen, iteration, render_type):
     global discrete_vels_prev, frame_count
     discrete_vels_next, delta_density, delta_vel = update(discrete_vels_prev)
     
+
     #force plotting
     if iteration % 25 == 0 and iteration > 500:
         hori_force, vert_force = Helpers.new_force(delta_vel, delta_density)
-        print(f"iteration {iteration} - horizontal force: {hori_force}, vertical force: {vert_force}")
-        update_graphs(it_count = iteration, lift_item=vert_force, drag_item=hori_force)
+        hori_force_SI = converters.sim_to_SI_force(hori_force)
+        vert_force_SI = converters.sim_to_SI_force(vert_force)
+        print(f"iteration {iteration} - horizontal force: {hori_force_SI}, vertical force: {vert_force_SI}")
+        update_graphs(it_count = iteration, lift_item=vert_force_SI, drag_item=hori_force_SI)
     
     
     #drawing the simulation

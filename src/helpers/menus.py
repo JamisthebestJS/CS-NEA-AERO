@@ -4,6 +4,7 @@ import os
 from helpers.sort import insertion_sort
 from helpers.validation import validation_dict
 from helpers.saving_settings import save_settings, load_settings
+from helpers.variable_calc import * ### ********************
 
 BTN_COLOUR = (60,220,80)
 ACTIVE_BTN_COLOUR = (220,80,60)
@@ -119,7 +120,7 @@ class SettingsMenu(Menu):
             else:
                 colour = BTN_COLOUR
             pygame.draw.rect(self.screen, colour, (self.input_rects[i][:]))
-            textbox_text = self.font2.render(self.setting_titles[i]+self.button_inputs[i], True, (0,0,0))
+            textbox_text = self.font2.render(self.setting_titles[i]+str(self.button_inputs[i]), True, (0,0,0))
             self.screen.blit(textbox_text, (self.input_rects[i].x + x_pad, self.input_rects[i].y + y_pad))
 
         return self.screen
@@ -146,6 +147,7 @@ class SettingsMenu(Menu):
                         self.active_inputs[i] = False
 
         #for text entry
+        index = -1
         if event.type == pygame.KEYDOWN:
             index = self.active_inputs.index(True)
             
@@ -163,7 +165,17 @@ class SettingsMenu(Menu):
             else:
                 print("valid input: ", self.button_inputs[index] + event.unicode)
                 self.button_inputs[index] += event.unicode
-            
+        
+        #TODO: need to get calculated values here
+        #if values of temp and altitude entered and not typing density, clear density
+        if self.button_inputs[self.setting_tags.index("temperature")] != "" and self.button_inputs[self.setting_tags.index("altitude")] != "" \
+            and index != self.setting_tags.index("density"):
+            self.button_inputs[self.setting_tags.index("density")] = ""
+        #vice verse
+        if self.button_inputs[self.setting_tags.index("density")] != "" and index != self.setting_tags.index("temperature")\
+            and index != self.setting_tags.index("altitude"):
+            self.button_inputs[self.setting_tags.index("temperature")] = ""
+            self.button_inputs[self.setting_tags.index("altitude")] = "12200"
     
     def create_textboxes(self, ):
         input_rects = []

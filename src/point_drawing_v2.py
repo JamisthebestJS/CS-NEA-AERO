@@ -24,21 +24,19 @@ class CatmullRom(object):
         a0 = []
         a1 = []
         a2 = []
-        #calculates t coefficients
         for i in range(2):
-            a0.append(-p0[i] + 3 * p1[i] - 3 * p2[i] + p3[i])
-            a1.append(p0[i] - 5 * p1[i] + 4 * p2[i] - p3[i])
-            a2.append(-p0[i] + p2[i])
+            a0.append(-0.5 * p0[i] + 1.5 * p1[i] - 1.5 * p2[i] + 0.5 * p3[i])
+            a1.append(p0[i] - 2.5 * p1[i] + 2 * p2[i] - 0.5 * p3[i])
+            a2.append(-0.5 * p0[i] + 0.5 * p2[i])
         a3 = p1
         point = []
         for i in range(2):
-            point.append(0.5 * (((a0[i] * t + a1[i]) * t + a2[i]) * t + a3[i]))
+            point.append(((a0[i] * t + a1[i]) * t + a2[i]) * t + a3[i])
         return point
     
     #creates a list of points (each one a pixel) between P0 and Pn which creates the spline
     def catmull_rom_path_calc(self, ):
         n = len(self.control_points)
-        #uses points twice when on extreme ends of spline (for P0, P1 and Pn-1, Pn)
         for i in range(n-1):
             p0 = self.control_points[i - 1] if i > 0 else self.control_points[i]
             p1 = self.control_points[i]
@@ -46,19 +44,18 @@ class CatmullRom(object):
             p3 = self.control_points[i + 2] if i + 2 < n else self.control_points[i + 1]
             for j in range(CAT_ROM_DEF):
                 t = j / CAT_ROM_DEF
-                #if i < n - 1 or j == 0: #TODO WHY THIS HERE????
                 self.path.append(self.catmull_rom_point_calc(p0, p1, p2, p3, t))
             
-        #first point joins to last point
+        #trying to get first to join to last point
         for j in range(CAT_ROM_DEF):
             t = j / CAT_ROM_DEF
-            self.path.append(self.catmull_rom(self.control_points[-2], self.control_points[-1], self.control_points[0], self.control_points[1], t))
+            self.path.append(self.catmull_rom_point_calc(self.control_points[-2], self.control_points[-1], self.control_points[0], self.control_points[1], t))
     
     def render_path(self, screen):
         for point in self.path:
             pygame.draw.circle(screen, (255, 255, 255), (int((point[0] + 1)), int((point[1] + 1))), 1)
     
-    def get_path():
+    def get_path(self):
         return self.path
 
     def del_point(self, vertex_position):
@@ -72,17 +69,17 @@ class CatmullRom(object):
                 self.control_points[i] = new_position
         self.new_path()
     
-    def new_point(vertex_position):
+    def new_point(self, vertex_position):
         self.control_points.append(vertex_position)
         #clear path and recalculate
         self.new_path()
     
-    def new_path():
+    def new_path(self):
         self.path = []
         if len(self.control_points) > 1:
             self.catmull_rom_path_calc()
 
-    def clear_path():
+    def clear_path(self):
         self.path = []
         self.control_points = []
 
@@ -96,13 +93,13 @@ class Modes(staticmethod):
     def clear_all(screen):
         screen.fill((0,0,0))
         VertexListOperations.vertices = []
-        self.clear_path()
+        spline.clear_path()
         return screen
 
     @staticmethod
     def place_vertex(position):
         if VertexListOperations.get_vertices_list_length() < MAX_VERTEX_COUNT:
-            if 0 <= position[0] < 9*SCREEN_SIZE/10 and 0 <= y <= SCREEN_SIZE:
+            if 0 <= position[0] < 9*SCREEN_SIZE/10 and 0 <= position[1] <= SCREEN_SIZE:
                 print(f"Placing vertex at ({position[0]}, {position[1]})")
                 Vertex(position)
                 spline.new_point(position)
@@ -128,7 +125,7 @@ class Modes(staticmethod):
         vertex = VertexListOperations.get_vertex(vertex_id)
         start_position = vertex.get_position()
         new_position = (start_position[0] + move_vector[0], start_position[1] + move_vector[1])
-        vertex.update_position(new_position[0], new_position[1])
+        vertex.update_position(new_position)
         spline.move_points(start_position, new_position)
     
     
@@ -213,7 +210,7 @@ class Toolbox(staticmethod):
                 
                 if 0 <= new_x < len(image) and 0 <= new_y < len(image[0]) and image[new_x, new_y] == old_colour:
                     image[new_x, new_y] = new_colour
-                    queue.enqueue((nx, ny))
+                    queue.enqueue((new_x, new_y))
         
         print("flood-fill finished after filling", queue_count, "nodes")
         
@@ -260,7 +257,7 @@ class Toolbox(staticmethod):
     
     @staticmethod
     def clamp(value, min, max):
-        return max if value > max else min if value < min else val
+        return max if value > max else min if value < min else value
 
     
 MODE_DICT = {
@@ -288,11 +285,12 @@ class VertexListOperations(object):
     
     @staticmethod
     def get_vertices_list_length():
+        print(VertexListOperations.vertices)
         return len(VertexListOperations.vertices)
     
     @staticmethod
     def del_from_vertices_list(pos):######
-        id = VertexListOperations.get_vertex_ID_at_pos(pos)
+        id = VertexListOperations.get_vertex_ID_at_position(pos)
         if id != -1:
             if len(VertexListOperations.vertices) < 1:
                 print("no vertex to delete from VertexListOperations.vertices")
@@ -311,7 +309,7 @@ class VertexListOperations(object):
         VertexListOperations.vertices.append(vertex)
         
     @staticmethod
-    def get_vertex_ID_at_pos(pos):
+    def get_vertex_ID_at_position(pos):
         for i in range(VertexListOperations.get_vertices_list_length()):
             vertex = VertexListOperations.vertices[i]
             
@@ -320,6 +318,7 @@ class VertexListOperations(object):
                 return vertex.get_id()
         
         return -1 #if not in vertex list
+    
 
 #Vertex class
 #may need to split into stuff about the list (static) and actual vertices (nonstatic)
@@ -327,6 +326,8 @@ class Vertex(object):
     id_counter = 0
     def __init__(self, position):
         self.position = position
+        self.x = position[0]
+        self.y = position[1]
         self._ID = Vertex.id_counter
         Vertex.id_counter += 1
         VertexListOperations.append_vertices_list(self)
@@ -339,6 +340,8 @@ class Vertex(object):
     
     def update_position(self, new_position):
         self.position = new_position
+        self.x = new_position[0]
+        self.y = new_position[1]
     
     def render(self, screen):
         pygame.draw.circle(screen, (255, 0, 0), self.position, 2)
@@ -401,14 +404,14 @@ def p_main(screen, event, font):
             if Modes.get_mode() == "move":
                 dragged_vertex_ID = VertexListOperations.get_vertex_ID_at_position(mouse_position)
                 if dragged_vertex_ID != -1:
-                    drag_start_position = event.position
+                    drag_start_position = event.pos
                     dragging = True
         
     #IF MOUSE RELEASE
     #dy, dx fed into Modes.move_vert
     elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
         if dragging:
-            drag_end_position = pygame.mouse.get_position()
+            drag_end_position = pygame.mouse.get_pos()
             dx = drag_end_position[0] - drag_start_position[0]
             dy = drag_end_position[1] - drag_start_position[1]
             

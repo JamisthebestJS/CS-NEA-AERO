@@ -2,7 +2,7 @@
 
 import pygame
 
-
+DIRECTORY = "src\helpers\\txt_files"
 BTN_COLOUR = (60,220,80)
 SB_BTN_COLOUR = (220, 60, 80)
 
@@ -48,7 +48,7 @@ def save_menu(aerofoil, screen, font):
 
 def save(aerofoil):
     #open stats file (to see how many aerofoils exist)
-    stats_file = open("helpers\\txt_files\settings.txt", "r")
+    stats_file = open(DIRECTORY+"\settings.txt", "r")
     stats_content = []
     all_content = []
     
@@ -62,8 +62,8 @@ def save(aerofoil):
     
     new_aerofoil_count = str(int(aerofoil_count) + 1) #keeps a record of how many aerofoils so has a default name for the aerofoils as they are saved.
     #writes new aerofoil count into the file
-    all_content[0] = "aerofoil_count = " + str(new_aerofoil_count)
-    with open("settings.txt", "w") as file:
+    all_content[0] = "aerofoil_count = " + str(new_aerofoil_count) + "\n"
+    with open(DIRECTORY+"\settings.txt", "w") as file:
         for line in all_content:
             file.write(line)
             
@@ -72,7 +72,7 @@ def save(aerofoil):
     if name == None:
         name = f"aerofoil {new_aerofoil_count}"
     
-    with open(f"Aerofoils\{name}.txt", "w") as file:
+    with open(DIRECTORY+f"\Aerofoils\{name}.txt", "w") as file:
         for line in aerofoil:
             for node in line:
                 if node == True:

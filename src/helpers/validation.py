@@ -8,6 +8,15 @@ altitude_validation = "(?:(?:0|1|2\d{0,4}) | (?:\d{1,4}) (?:\.\d{0,5})?){1}"
 sim_scale_validation = "(?:(?:0?\.(?!0+$)\d{0,5}) | (?:1|2?\d(?:\.\d{0,5})?) | (?:3\d(?:\.\d{0,5})?)){1}"
 inflow_velocity_validation = "(?:(?:0?\.(?!0+$)\d{0,5}) | (?:1?\d{1,2}(?:\.\d{0,5})?) | (2[0-4]\d(?:\.\d{0,5})?)){1}"
 
+#temp
+density_validation = ""
+temperature_validation = ""
+altitude_validation = ""
+sim_scale_validation = ""
+inflow_velocity_validation = ""
+
+
+
 class Validators(object):
 
     def __init__(self, density, temperature, altitude, sim_scale, inflow_velocity):
