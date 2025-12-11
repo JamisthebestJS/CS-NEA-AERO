@@ -1,6 +1,6 @@
-aerofoil_count = 1
-temperature = 
-altitude = 12200
-density = 1.5
+aerofoil_count = 2
+temperature = [
+altitude = '
+density = 1
 sim_scale = 10
-inflow_velocity = 34
+inflow_velocity = '

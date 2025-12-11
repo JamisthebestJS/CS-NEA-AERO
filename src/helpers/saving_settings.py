@@ -2,7 +2,7 @@
 
 
 
-DIR = "src\helpers\\txt_files\settings.txt"
+DIR = r"src\helpers\txt_files\settings.txt"
 
 
 
@@ -24,7 +24,6 @@ def save_settings(setting_tags, settings_values, directory = DIR):
             if tag in line:
                 all_content[j] = f"{tag} = {settings_values[i]}\n" 
 
-    print(all_content)
 
     with open(DIR, "w") as file:
         for line in all_content:

@@ -41,7 +41,7 @@ def construct_menus(screen, big_font, med_font, small_font):
     
     #sim settings menu
     setting_titles = ["temperature(C): ", "altitude(m): ", "density(kg/m³): ", "sim width(m): ", "max velocity(m/s): "]
-    setting_tags = ["temperature", "altitude", "density", "sim_scale", "inflow_velocity"]
+    setting_tags = ["temperature", "altitude", "density", "sim_width", "inflow_velocity"]
     setting_defaults = load_settings(setting_tags)
     if setting_defaults == [0,0,0,0,0]:
         setting_defaults = ["20", "12200", "1.2", "5", "30"]
@@ -100,17 +100,28 @@ class SettingsMenu(Menu):
         self.title = title
         self.setting_titles = setting_titles
         self.button_inputs = setting_defaults
+        self.button_inputs = [str(item) for item in self.button_inputs]
         self.setting_tags = setting_tags
+        self.error_type = None
         self.input_rects, self.active_inputs = self.create_textboxes()
+        self.erroring_index = -1
 
-    def main_render(self):
-        
+    def render(self):
+        #renders the menu layout
+        #ensures error message isnt cleared every frame
+        if self.error_type == None:
+            self.screen.fill((0, 0, 0))
+        else:
+            if self.error_type == "invalidInput":
+                error_message = self.font2.render(f"Invalid input for {self.setting_tags[self.erroring_index]}", True, (255, 0, 0))
+            else:
+                error_message = self.font2.render(f"{self.error_type}", True, (255, 0, 0))
+            self.screen.blit(error_message, (self.width/14, self.height*8/9))
+
         title_text = self.font.render(self.title, True, (255, 255, 255))
         title_width, title_height = self.font.size(self.title)
         self.screen.blit(title_text, ((self.width - title_width)/2, FRACTION*self.height - title_height/2))
 
-        #renders the menu layout
-        self.screen.fill((0, 0, 0))
         x_pad = 5
         y_pad = (self.input_rects[0].height - self.font2.size(self.setting_titles[0])[1])/2
 
@@ -120,16 +131,8 @@ class SettingsMenu(Menu):
             else:
                 colour = BTN_COLOUR
             pygame.draw.rect(self.screen, colour, (self.input_rects[i][:]))
-            textbox_text = self.font2.render(self.setting_titles[i]+str(self.button_inputs[i]), True, (0,0,0))
+            textbox_text = self.font2.render(self.setting_titles[i]+self.button_inputs[i], True, (0,0,0))
             self.screen.blit(textbox_text, (self.input_rects[i].x + x_pad, self.input_rects[i].y + y_pad))
-
-        return self.screen
-
-    def input_render(self, ):
-
-        
-        for i in range(len(self.button_inputs)):
-            pass 
 
         return self.screen
 
@@ -149,22 +152,32 @@ class SettingsMenu(Menu):
         #for text entry
         index = -1
         if event.type == pygame.KEYDOWN:
-            index = self.active_inputs.index(True)
+            try:
+                index = self.active_inputs.index(True)
+            except:
+                print("No active input")
+                self.error_type = "noActiveInputs"
+            self.error_type = None
             
             if event.key == pygame.K_BACKSPACE:
-                self.button_inputs[index] = self.button_inputs[index][:-1]
+                if len(self.button_inputs[index]) > 0:
+                    self.button_inputs[index] = self.button_inputs[index][:-1]
+                else:
+                    self.button_inputs[index] = ""
             
             elif event.key == pygame.K_RETURN:
                 print("attempting to save setting")
                 #validating input then saving to file
-                if validation_dict[self.setting_tags[index]](self.button_inputs[index]):
-                    print(f"{self.setting_titles[index]} set to {self.button_inputs[index]}")
+                if validation_dict[self.setting_tags[index]](self.button_inputs[index]) == True:
                     self.active_inputs[index] = False
-                    save_settings(self.setting_tags, self.button_inputs)
+                    save_settings(self.setting_tags, str(self.button_inputs))
+                else:
+                    print("invalid input for ", self.setting_tags[index])
+                    self.error_type = "invalidInput"
+                    self.erroring_index = index
             
             else:
-                print("valid input: ", self.button_inputs[index] + event.unicode)
-                self.button_inputs[index] += event.unicode
+                self.button_inputs[index] += str(event.unicode)
         
         #TODO: need to get calculated values here
         #if values of temp and altitude entered and not typing density, clear density
@@ -176,6 +189,8 @@ class SettingsMenu(Menu):
             and index != self.setting_tags.index("altitude"):
             self.button_inputs[self.setting_tags.index("temperature")] = ""
             self.button_inputs[self.setting_tags.index("altitude")] = "12200"
+        
+        return self.screen
     
     def create_textboxes(self, ):
         input_rects = []
@@ -193,9 +208,8 @@ class SettingsMenu(Menu):
         return input_rects, active_inputs
 
     def controller(self, event, ):
-        self.screen = self.main_render()
+        self.screen = self.render()
         self.do_input(event, )
-        self.screen = self.input_render()
         pygame.display.flip()
         return str(self.type), self.screen
 
@@ -208,7 +222,7 @@ class ListMenu(Menu):
         self.vis_size = vis_size
         self.item_height = self.height//vis_size
         self.scroll_y = 0
-        self.directory = "src\helpers\\txt_files\Aerofoils"
+        self.directory = r"src\helpers\txt_files\Aerofoils"
     
     
     def render(self, items, ):

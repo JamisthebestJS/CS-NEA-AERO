@@ -344,7 +344,7 @@ def LBM_setup(aerofoil_name):
     colours = jnp.zeros((SCREEN_WIDTH, SCREEN_HEIGHT, 3), dtype=jnp.uint8)
     
     #loading settings from file
-    setting_tags = ["density", "temperature", "altitude", "sim_scale", "inflow_velocity"]
+    setting_tags = ["density", "temperature", "altitude", "sim_width", "inflow_velocity"]
     global setting_values
     setting_values = load_settings(setting_tags)
     global converters
@@ -355,7 +355,7 @@ def LBM_setup(aerofoil_name):
 
    )
     global delta_x
-    delta_x = converters.SI_to_sim_length(float(setting_values[setting_tags.index("sim_scale")])) / N_POINTS_X
+    delta_x = converters.SI_to_sim_length(float(setting_values[setting_tags.index("sim_width")])) / N_POINTS_X
     print("finished setup")
     return True
 
