@@ -17,12 +17,6 @@ M_ITERATIONS = 1000000
 #fucntion to start the simulations and to loop for propulsion devices and etc..
 #*******************************************
 
-def sim(screen, render_type, iteration):
-    iteration = LBM_main_loop(screen, iteration, render_type)
-    return iteration
-
-
-
 #resets variables to go back to the main menu
 def go_to_main_menu():
     running = True
@@ -30,18 +24,15 @@ def go_to_main_menu():
     menu_type = "main_menu"
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     print("back to main menu")
-    
-    
     return running, iteration, menu_type, screen
 
-
+#main loop
 def main(screen):
     running = True
     setup = False
     iteration = 0
     menu_type = "main_menu"
     render_type = "vorticity" #options: "density", "velocity", "vorticity"
-
 
     #instantiating the menus and adding them to the dictionary
     menus_dict = construct_menus(screen, big_font, menu_font, small_font)
@@ -50,15 +41,13 @@ def main(screen):
     "prop": sim,
     "jet": sim,
     "sim": sim,
-    
     }
     DISPLAYS = menus_dict | doings
         
     
     while running:
-        
         if menu_type == "sim" or menu_type == "prop" or menu_type == "jet":
-            iteration = sim(screen, render_type, iteration)
+            iteration = LBM_main_loop(screen, iteration, render_type)
             
         for event in pygame.event.get():
             if event.type == pygame.QUIT:

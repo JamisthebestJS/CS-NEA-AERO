@@ -5,8 +5,6 @@ MAXSIZE = 100000 #enough for >300x300 image size (which is, like the max current
 
 class Queue(object):
 
-    
-    
     def __init__(self):
         self.queue = []
         self.head = -1

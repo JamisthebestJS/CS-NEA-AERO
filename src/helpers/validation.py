@@ -1,10 +1,12 @@
 import re
 #these apparently dont work :(
-density_validation = re.compile(r"^(0?\.(?!0+)\d{1,5}) | (1(\.\d{0,5})?) | (2(\.0{0,5})?)$")
-temperature_validation = re.compile(r"^-?[012345]\d?(\.\d{0,5})?$")
-altitude_validation = re.compile(r"^([012]\d{0,4}) | (\d{1,4}) (\.\d{0,5})?$")
-sim_width_validation = re.compile(r"^(0?\.(?!0+)\d{0,5}) | ([12]?\d(\.\d{0,5})?) | (3\d(\.\d{0,5})?)$")
-inflow_velocity_validation = re.compile(r"^(0?\.(?!0+)\d{0,5}) | (1?\d{1,2}(\.\d{0,5})?) | (2[01234]\d(\.\d{0,5})?)$")
+density_validation = r"^0?\.(?!0+$)\d{1,5})|(1(\.\d{1,5})?)|(2(\.0{1,5})?$"
+temperature_validation = r"-?[0-5]\d?(\.\d{1,5})?$"
+altitude_validation = r"(0|1|2\d{0,4})|(\d{1,4}) (\.\d{1,5})?$"
+sim_scale_validation = r"(0?\.(?!0+$)\d{0,5})|([1-2]?\d(\.\d{1,5})?)|(3\d(\.\d{1,5})?)$"
+inflow_velocity_validation = r"(0?\.(?!0+$)\d{1,5})|(1?\d{1,2}(\.\d{1,5})?)|(2[0-4]\d(\.\d{1,5})?)$"
+
+
 
 class Validators(object):
 
