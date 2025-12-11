@@ -28,7 +28,6 @@ class Conversions(object):
         SI_force = sim_force * self.force_coefficient
         return SI_force
     
-    
 
     def vel_coef_calc(self, SI_velocity):
         return SI_velocity / SIM_VELOCITY

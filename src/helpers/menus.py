@@ -4,7 +4,7 @@ import os
 from helpers.sort import insertion_sort
 from helpers.validation import validation_dict
 from helpers.saving_settings import save_settings, load_settings
-from helpers.variable_calc import * ### ********************
+from helpers.variable_calc import VariableCalculators
 
 BTN_COLOUR = (60,220,80)
 ACTIVE_BTN_COLOUR = (220,80,60)
@@ -125,14 +125,6 @@ class SettingsMenu(Menu):
 
         return self.screen
 
-    def input_render(self, ):
-
-        
-        for i in range(len(self.button_inputs)):
-            pass 
-
-        return self.screen
-
     def do_input(self, event, ):
         for i in range(len(self.setting_titles)):
             #for clicks
@@ -170,11 +162,14 @@ class SettingsMenu(Menu):
         #if values of temp and altitude entered and not typing density, clear density
         if self.button_inputs[self.setting_tags.index("temperature")] != "" and self.button_inputs[self.setting_tags.index("altitude")] != "" \
             and index != self.setting_tags.index("density"):
-            self.button_inputs[self.setting_tags.index("density")] = ""
+            temperature = self.textbox_text[self.setting_tags.index("temperature")]
+            altitude = self.textbox_text[self.setting_tags.index("altitude")]
+            self.button_inputs[self.setting_tags.index("density")] = VariableCalculators.calculate_density(temperature=temperature, altitude=altitude)
         #vice verse
         if self.button_inputs[self.setting_tags.index("density")] != "" and index != self.setting_tags.index("temperature")\
             and index != self.setting_tags.index("altitude"):
-            self.button_inputs[self.setting_tags.index("temperature")] = ""
+            density = self.textbox_text[self.setting_tags.index("density")]
+            self.button_inputs[self.setting_tags.index("temperature")] = VariableCalculators.calculate_temperature(density=density)
             self.button_inputs[self.setting_tags.index("altitude")] = "12200"
     
     def create_textboxes(self, ):
@@ -201,7 +196,7 @@ class SettingsMenu(Menu):
 
 
 
-#TITLES NEED DOING STILL AS IN RENDERING THEM
+#TITLES NEED DOING STILL AS IN RENDERING THEM******
 class ListMenu(Menu):
     def __init__(self, screen, font, font2, type, vis_size):
         super().__init__(screen, font, font2, type, )

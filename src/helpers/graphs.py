@@ -1,10 +1,4 @@
-#graphs
-
-#matplotlib stuff showing how forces are changing over time.
-
 import matplotlib.pyplot as plt
-
-#currently just a random graph as a placeholder sort of thing.
 
 plt.ion()  # turning interactive mode on
 
@@ -40,7 +34,7 @@ def update_graphs(drag_item, lift_item, it_count):
             if i%2 == 0:
                 del(drag_list[i])
                 del(lift_list[i])
-                del(iteration_list[i])    
+                del(iteration_list[i])
     render_graph()
 
 def clear_graph():

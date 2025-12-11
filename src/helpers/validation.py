@@ -2,18 +2,11 @@
 
 import re
 #these apparently dont work :(
-density_validation = "(?:(?:0?\.(?!0+$)\d{1,5}) | (1(?:\.\d{0,5})?) | (2(?:\.0{0,5})?)){1}"
-temperature_validation = "(?:(?:-)?(?:0-5)\d?(?:\.\d{0,5})?){1}"
-altitude_validation = "(?:(?:0|1|2\d{0,4}) | (?:\d{1,4}) (?:\.\d{0,5})?){1}"
-sim_scale_validation = "(?:(?:0?\.(?!0+$)\d{0,5}) | (?:1|2?\d(?:\.\d{0,5})?) | (?:3\d(?:\.\d{0,5})?)){1}"
-inflow_velocity_validation = "(?:(?:0?\.(?!0+$)\d{0,5}) | (?:1?\d{1,2}(?:\.\d{0,5})?) | (2[0-4]\d(?:\.\d{0,5})?)){1}"
-
-#temp
-density_validation = ""
-temperature_validation = ""
-altitude_validation = ""
-sim_scale_validation = ""
-inflow_velocity_validation = ""
+density_validation = r"^0?\.(?!0+$)\d{1,5})|(1(\.\d{1,5})?)|(2(\.0{1,5})?$"
+temperature_validation = r"-?[0-5]\d?(\.\d{1,5})?$"
+altitude_validation = r"(0|1|2\d{0,4})|(\d{1,4}) (\.\d{1,5})?$"
+sim_scale_validation = r"(0?\.(?!0+$)\d{0,5})|([1-2]?\d(\.\d{1,5})?)|(3\d(\.\d{1,5})?)$"
+inflow_velocity_validation = r"(0?\.(?!0+$)\d{1,5})|(1?\d{1,2}(\.\d{1,5})?)|(2[0-4]\d(\.\d{1,5})?)$"
 
 
 

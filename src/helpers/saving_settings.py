@@ -2,7 +2,7 @@
 
 
 
-DIR = "src\helpers\\txt_files\settings.txt"
+DIR = "src\\helpers\\txt_files\settings.txt"
 
 
 
