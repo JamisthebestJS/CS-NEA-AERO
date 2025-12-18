@@ -1,5 +1,5 @@
 import pygame
-import numpy as np
+import jax.numpy as jnp
 from helpers.queue import Queue
 from helpers.aerofoil_save_funcs import save_menu
 
@@ -16,8 +16,8 @@ MAX_VERTEX_COUNT = 30
 class CatmullRom(object):
 
     def __init__(self, control_points, path):
-        self.control_points = control_points
-        self.path = path
+        self.__control_points = control_points
+        self.__path = path
 
     #calculates q(t) from t for both x and y directions and returns (q_x(t), q_y(t))
     def catmull_rom_point_calc(self, p0, p1, p2, p3, t):
@@ -36,54 +36,61 @@ class CatmullRom(object):
     
     #creates a list of points (each one a pixel) between P0 and Pn which creates the spline
     def catmull_rom_path_calc(self, ):
-        n = len(self.control_points)
+        n = len(self.__control_points)
         for i in range(n-1):
-            p0 = self.control_points[i - 1] if i > 0 else self.control_points[i]
-            p1 = self.control_points[i]
-            p2 = self.control_points[i + 1]
-            p3 = self.control_points[i + 2] if i + 2 < n else self.control_points[i + 1]
+            p0 = self.__control_points[i - 1] if i > 0 else self.__control_points[i]
+            p1 = self.__control_points[i]
+            p2 = self.__control_points[i + 1]
+            p3 = self.__control_points[i + 2] if i + 2 < n else self.__control_points[i + 1]
             for j in range(CAT_ROM_DEF):
                 t = j / CAT_ROM_DEF
-                self.path.append(self.catmull_rom_point_calc(p0, p1, p2, p3, t))
+                self.__path.at[self.get_path_length()-1].set(self.catmull_rom_point_calc(p0, p1, p2, p3, t))
             
         #trying to get first to join to last point
         for j in range(CAT_ROM_DEF):
             t = j / CAT_ROM_DEF
-            self.path.append(self.catmull_rom_point_calc(self.control_points[-2], self.control_points[-1], self.control_points[0], self.control_points[1], t))
+            self.__path.at[self.get_path_length()-1].set(self.catmull_rom_point_calc(self.__control_points[-2], self.__control_points[-1], self.__control_points[0], self.__control_points[1], t))
     
     def render_path(self, screen):
-        for point in self.path:
+        for point in self.__path:
             pygame.draw.circle(screen, (255, 255, 255), (int((point[0] + 1)), int((point[1] + 1))), 1)
     
     def get_path(self):
-        return self.path
+        return self.__path
 
     def del_point(self, vertex_position):
-        self.control_points.remove(vertex_position)
+        self.__control_points.remove(vertex_position)
         self.new_path()
     
     def move_points(self, old_position, new_position):
         #find old pos in points list and replace with new pos
-        for i in range(len(self.control_points)):
-            if self.control_points[i] == old_position:
-                self.control_points[i] = new_position
+        for i in range(len(self.__control_points)):
+            if self.__control_points[i] == old_position:
+                self.__control_points[i] = new_position
         self.new_path()
     
     def new_point(self, vertex_position):
-        self.control_points.append(vertex_position)
+        self.__control_points.append(vertex_position)
         #clear path and recalculate
         self.new_path()
     
     def new_path(self):
-        self.path = []
-        if len(self.control_points) > 1:
+        self.__path = []
+        if len(self.__control_points) > 1:
             self.catmull_rom_path_calc()
 
     def clear_path(self):
-        self.path = []
-        self.control_points = []
+        self.__path = []
+        self.__control_points = []
+    
+    def get_path_length(self):
+        count = 0
+        for i in self.__path:
+            if self.__path[i] != [0, 0]:
+                count+=1
+        return count
 
-spline = CatmullRom(control_points = [], path = np.array([]))
+spline = CatmullRom(control_points = [], path = jnp.zeros((MAX_VERTEX_COUNT, 2)))
 
 
 class Modes(staticmethod):
@@ -153,7 +160,7 @@ class Modes(staticmethod):
         
         #make a true/false mask of outline
         
-        object_mask = np.zeros((SIM_HEIGHT, SIM_HEIGHT))
+        object_mask = jnp.zeros((SIM_HEIGHT, SIM_HEIGHT))
         for i in save_path:
             object_mask[i[1], i[0]] = True #aerofoil needs to be rotated because of the way saving works, each file row is each aerofoil column, but reading, it is 'correct
         
@@ -164,7 +171,7 @@ class Modes(staticmethod):
         #small error check - if has filled all 4 corners, likely picked wrong spot for flood fill start - NOT el-wise ob_mask
         print("corner vals:", object_mask[0,0], object_mask[0,-1], object_mask[-1,0], object_mask[-1,-1])
         if object_mask[0,0] == 1 and object_mask[0,-1] == 1 and object_mask[-1, 0] == 1 and object_mask[-1,-1] == 1:
-            object_mask = np.logical_not(object_mask)
+            object_mask = jnp.logical_not(object_mask)
         
         save_menu(object_mask, screen, font)
         
