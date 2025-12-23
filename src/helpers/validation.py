@@ -1,10 +1,9 @@
 import re
-#these apparently dont work :(
-density_validation = r"^0?\.(?!0+$)\d{1,5})|(1(\.\d{1,5})?)|(2(\.0{1,5})?$"
-temperature_validation = r"-?[0-5]\d?(\.\d{1,5})?$"
-altitude_validation = r"(0|1|2\d{0,4})|(\d{1,4}) (\.\d{1,5})?$"
-sim_scale_validation = r"(0?\.(?!0+$)\d{0,5})|([1-2]?\d(\.\d{1,5})?)|(3\d(\.\d{1,5})?)$"
-inflow_velocity_validation = r"(0?\.(?!0+$)\d{1,5})|(1?\d{1,2}(\.\d{1,5})?)|(2[0-4]\d(\.\d{1,5})?)$"
+density_validation = r"^(0?\.(?!0+$)\d{1,5}|1(\.\d{1,5})?|2(\.0{1,5})?)$"
+temperature_validation = r"^-?[0-5]\d?(\.\d{1,5})?$"
+altitude_validation = r"^(1|2)?\d{0,4}(\.\d{1,5})?$"
+sim_width_validation = r"^0?\.(?!0+$)\d{0,5}|(1|2)?\d(\.\d{1,5})?|3\d(\.\d{1,5})?$"
+inflow_velocity_validation = r"^0?\.(?!0+$)\d{1,5}|1?\d{1,2}(\.\d{1,5})?|2[0-4]\d(\.\d{1,5})?$"
 
 
 
@@ -18,34 +17,24 @@ class Validators(object):
         self.inflow_velocity_regex = inflow_velocity_val
     
     def validate_density(self, input):
-        if self.density_regex.match(input):
-            return True
-        else:
-            return False
+        search = re.fullmatch(self.density_regex, input)
+        return search is not None and input != ""
     
     def validate_temperature(self, input):
-        if self.temperature_regex.match(input):
-            return True
-        else:
-            return False
+        search = re.fullmatch(self.temperature_regex, input)
+        return search is not None and input != ""
 
     def validate_altitude(self, input):
-        if self.altitude_regex.match(input):
-            return True
-        else:
-            return False
+        search = re.fullmatch(self.altitude_regex, input)
+        return search is not None and input != ""
 
     def validate_sim_width(self, input):
-        if self.sim_width_regex.match(input):
-            return True
-        else:
-            return False
+        search = re.fullmatch(self.sim_width_regex, input)
+        return search is not None and input != ""
 
     def validate_inflow_velocity(self, input):
-        if self.inflow_velocity_regex.match(input):
-            return True
-        else:
-            return False
+        search = re.fullmatch(self.inflow_velocity_regex, input)
+        return search is not None and input is not ""
 
 validators = Validators(density_validation, temperature_validation, altitude_validation, sim_width_validation, inflow_velocity_validation)
 

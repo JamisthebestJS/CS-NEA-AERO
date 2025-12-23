@@ -1,13 +1,7 @@
-
-
-
-
 DIR = "src\\helpers\\txt_files\settings.txt"
 
-
-
-def save_settings(setting_tags, settings_values, directory = DIR):
-    stats_file = open(DIR, "r")
+def save_settings(setting_tags, settings_values, directory):
+    stats_file = open(directory, "r")
     stats_content = []
     all_content = []
     
@@ -17,19 +11,18 @@ def save_settings(setting_tags, settings_values, directory = DIR):
         stats_content.append(result)
         all_content.append(line)
     stats_file.close()
-    
-    #need to update content here
+    #updates values in file
     for i, tag in enumerate(setting_tags):
         for j, line in enumerate(all_content):
             if tag in line:
                 all_content[j] = f"{tag} = {settings_values[i]}\n" 
 
-
-    with open(DIR, "w") as file:
+    with open(directory, "w") as file:
         for line in all_content:
             file.write(line)
 
 def load_settings(settings_tags, directory = DIR):
+    #returns setting values of relevant lines in file
     settings_values = [0]*len(settings_tags)
     with open(directory, "r") as file:
         for line in file:

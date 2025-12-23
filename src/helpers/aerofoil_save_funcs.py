@@ -1,5 +1,3 @@
-#menu stuff for saving aerofoils
-
 import pygame
 
 DIRECTORY = "src\helpers\\txt_files"

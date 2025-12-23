@@ -1,7 +1,4 @@
-
-
 MAXSIZE = 100000 #enough for >300x300 image size (which is, like the max currently of the aerofoil after shrinkage)
-
 
 class Queue(object):
 

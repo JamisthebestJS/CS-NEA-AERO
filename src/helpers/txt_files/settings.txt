@@ -3,4 +3,4 @@ temperature = [
 altitude = '
 density = 1
 sim_scale = 10
-inflow_velocity = '
+inflow_velocity = 8

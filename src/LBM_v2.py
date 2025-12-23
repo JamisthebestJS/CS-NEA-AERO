@@ -1,47 +1,3 @@
-# LBM attempt 2
-r"""
-some notey bits. Remove at some point
-------
-
-Lattice Boltzmann Computations
-
-Density:
-
-ρ = ∑ᵢ fᵢ
-
-
-Velocities:
-
-u = 1/ρ ∑ᵢ fᵢ cᵢ
-
-
-Equilibrium:
-
-fᵢᵉ = ρ Wᵢ (1 + 3 cᵢ ⋅ u + 9/2 (cᵢ ⋅ u)² − 3/2 ||u||₂²)
-
-
-BGK Collision:
-
-fᵢ ← fᵢ − ω (fᵢ − fᵢᵉ)
-
-
-with the following quantities:
-
-fᵢ  : Discrete velocities
-fᵢᵉ : Equilibrium discrete velocities
-ρ   : Density
-∑ᵢ  : Summation over all discrete velocities
-cᵢ  : Lattice Velocities
-Wᵢ  : Lattice Weights
-ω   : Relaxation factor
-
-
-------
-
-Note that this scheme can become unstable for Reynoldsnumbers >~ 350
-
-"""
-
 import pygame
 from pathlib import Path
 import jax.numpy as jnp
@@ -51,7 +7,6 @@ from helpers.saving_settings import load_settings
 from helpers.unit_conversions import Conversions
 
 render_aerofoil = False
-
 
 global frame_count
 frame_count = 0
@@ -123,7 +78,7 @@ class Aerofoil(object):
     
         
     def get_aerofoil_coords(self):
-            if self.aerofoil_name == "jet":
+        if self.aerofoil_name == "jet":
             #***********************
             pass
         elif self.aerofoil_name == "prop":
@@ -131,15 +86,8 @@ class Aerofoil(object):
             pass
         else:
             #loading the aerofoil shape from file
-            aerofoil = jnp.array([])
-            ob_mask = jnp.array([])
-            ob_mask = self.load_aerofoil(self.aerofoil_name)
-            #if no aerofoil with that name exists - done for performance reasons
-            if  not jnp.array_equal(ob_mask, jnp.zeros((SCREEN_WIDTH, SCREEN_HEIGHT))):
-                aerofoil = jnp.array(jnp.where(ob_mask == 1))
-            else:
-                aerofoil = []
-                print("aerofoil is None")
+            ob_mask = self.load_aerofoil()
+            aerofoil = jnp.array(jnp.where(ob_mask == 1))
         return aerofoil
 
 
@@ -165,8 +113,6 @@ class Calculators(staticmethod):
         d means 2 macroscopic velocities (x and y)
         
         So converting from 9 discrete velocities to 2 macroscopic velocities to get a velocity in terms of x and y
-        
-        The weird stuff in the density is to sort of force density to be a 3rd rank tensor, so it can be broadcasted properly (i.e. cant divide 3d by 2d so make 2d 3d then divide)
         """        
         return macro_vels
 
@@ -176,10 +122,8 @@ class Calculators(staticmethod):
 
         #cᵢ
         proj_discrete_vels = jnp.einsum("dQ,NMd->NMQ", LATTICE_VELS, macro_vels)
-
         #||u||₂
         macro_vels_mag = jnp.linalg.norm(macro_vels, axis=-1, ord=2) #macro_vels over the last axis, and euclidian norm
-
         #maths according to the equation above
         equilibrium_discrete_vels = (
             density[..., jnp.newaxis] * LATTICE_WEIGHTS[jnp.newaxis, jnp.newaxis, :] * (
@@ -193,9 +137,9 @@ class Calculators(staticmethod):
         #should probably be done better since diving by density then multiplying
         momentum_density = jnp.einsum('NMQ,dQ->NMd', delta_vel, LATTICE_VELS)
         
-        delta_x_momentum = jnp.sum(momentum_density[:, :, 0]*delta_density[:, :]*delta_x**3)
-        delta_y_momentum = jnp.sum(momentum_density[:, :, 1]*delta_density[:, :]*delta_x**3)
-        #force = delta_momentum / 1 (as across 1 timestep)        
+        delta_x_momentum = jnp.sum(momentum_density[:, :, 0]*delta_density*delta_x**3)
+        delta_y_momentum = jnp.sum(momentum_density[:, :, 1]*delta_density*delta_x**3)
+        #force = delta_momentum / 1 (as across 1 timestep)
         return delta_x_momentum, delta_y_momentum
 
 
@@ -249,7 +193,8 @@ def update(discrete_vels_prev):
     # 3. Apply inflow stuff by Zou/He  (Dirichlet BC)
     macro_vels_prev = macro_vels_prev.at[0, 1:-1, :].set(velocity_profile[0, 1:-1, :])
     #maths according to Zou/He
-    density_prev = density_prev.at[0, :].set((Calculators.get_density(discrete_vels_prev[0, :, VERTICAL_VELS].T) + 2 * Calculators.get_density(discrete_vels_prev[0, :, LEFT_VELS].T)) / (1 - macro_vels_prev[0, :, 0]))
+    density_prev = density_prev.at[0, :].set((Calculators.get_density(discrete_vels_prev[0, :, VERTICAL_VELS].T) +\
+                                               2 * Calculators.get_density(discrete_vels_prev[0, :, LEFT_VELS].T)) / (1 - macro_vels_prev[0, :, 0]))
     
     # 4. calc the discrete equilibria velocities
     equilibrium_discrete_vels = Calculators.get_equilibrium_velocities(macro_vels_prev, density_prev)
@@ -264,7 +209,8 @@ def update(discrete_vels_prev):
     # 6. bounce-back (for no-slip on interior boundary)
     pre_bounceback_density = Calculators.get_density(discrete_vels_post_collisions)
     for i in range(N_DISCRETE_VELOCITIES):
-        discrete_vels_post_bounceback = discrete_vels_post_bounceback.at[aerofoil_coords[0, :], aerofoil_coords[1, :], LATTICE_INDICES[i]].set(discrete_vels_prev[aerofoil_coords[0, :], aerofoil_coords[1, :], OPPOSITE_LATTICE_INDICES[i]])
+        discrete_vels_post_bounceback = discrete_vels_post_bounceback.at[aerofoil_coords[0, :], \
+                            aerofoil_coords[1, :], LATTICE_INDICES[i]].set(discrete_vels_prev[aerofoil_coords[0, :], aerofoil_coords[1, :], OPPOSITE_LATTICE_INDICES[i]])
     post_bounceback_density = Calculators.get_density(discrete_vels_post_bounceback)
     #delta v due to momentum exchange
     delta_vel = discrete_vels_post_bounceback - discrete_vels_post_collisions
@@ -298,7 +244,7 @@ def LBM_setup(aerofoil_name):
     
     global aerofoil_coords
     aerofoil = Aerofoil(aerofoil_name)
-    aerofoil_coords = Aerofoil.get_aerofoil_coords()
+    aerofoil_coords = aerofoil.get_aerofoil_coords()
 
     #initialises an array which holds RGB val for every pixel in window
     global colours
@@ -308,6 +254,7 @@ def LBM_setup(aerofoil_name):
     setting_tags = ["density", "temperature", "altitude", "sim_width", "inflow_velocity"]
     global setting_values
     setting_values = load_settings(setting_tags)
+    #setting up conversion ratios
     global converters
     converters = Conversions(
         SI_velocity = float(setting_values[setting_tags.index("inflow_velocity")]),
@@ -330,7 +277,7 @@ def LBM_main_loop(screen, iteration, render_type):
     global discrete_vels_prev, frame_count
     discrete_vels_next, delta_density, delta_vel = update(discrete_vels_prev)
     
-
+    density = Calculators.get_density(discrete_vels_next)
     #force plotting
     if iteration % 25 == 0 and iteration > 500:
         hori_force, vert_force = Calculators.new_force(delta_vel, delta_density)
@@ -342,7 +289,6 @@ def LBM_main_loop(screen, iteration, render_type):
     
     #drawing the simulation
     discrete_vels_prev = discrete_vels_next
-    density = Calculators.get_density(discrete_vels_next)
     macro_vels = Calculators.get_macro_velocities(discrete_vels_next, density)
     vel_magnitude = jnp.linalg.norm(macro_vels, axis = -1, ord = 2)
     d_u__d_x, d_u__d_y = jnp.gradient(macro_vels[..., 0])
@@ -352,17 +298,3 @@ def LBM_main_loop(screen, iteration, render_type):
     
     iteration += 1
     return iteration
-
-"""
-#TODO:
-- 
-
-ERRORS:
--
-
- 
-BUGS:
-
-
-
-"""
