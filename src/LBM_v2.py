@@ -53,6 +53,19 @@ BOTTOM_VELS = jnp.array([4, 7, 8])
 VERTICAL_VELS = jnp.array([0, 2, 4])
 HORIZONTAL_VELS = jnp.array([0, 1, 3])
 
+#propulsion device size parameters
+JET_TOP = SCREEN_HEIGHT//3
+JET_BOTTOM = 2*SCREEN_HEIGHT//3
+JET_LEFT = SCREEN_WIDTH//3
+JET_RIGHT = JET_LEFT + SCREEN_WIDTH//3
+
+PROP_TOP = SCREEN_HEIGHT//5
+PROP_BOTTOM = 4*SCREEN_HEIGHT//5
+PROP_LEFT = SCREEN_WIDTH//3
+PROP_RIGHT = PROP_LEFT + SCREEN_WIDTH//5
+
+
+
 # Enable 64bit
 jax.config.update("jax_enable_x64", True)
 
@@ -61,6 +74,7 @@ class Aerofoil(object):
 
     def __init__(self, aerofoil_name):
         self.aerofoil_name = aerofoil_name
+        self.aerofoil_coords = self.get_aerofoil_coords()
     
     def load_aerofoil(self, ):
         mask = jnp.zeros((N_POINTS_X, N_POINTS_Y))
@@ -76,14 +90,31 @@ class Aerofoil(object):
                     mask = mask.at[AEROFOIL_OFFSET:AEROFOIL_OFFSET+len(line), j].set(line[:])       
         return mask
     
+    def get_name(self):
+        return self.aerofoil_name
+
+    def get_coords(self):
+        return self.aerofoil_coords
+    
         
     def get_aerofoil_coords(self):
+        global velocity_increase
+        velocity_increase = 0
+
         if self.aerofoil_name == "jet":
-            #***********************
-            pass
+            ob_mask = jnp.zeros((N_POINTS_X, N_POINTS_Y))
+            ob_mask = ob_mask.at[JET_LEFT:JET_RIGHT, JET_TOP:JET_BOTTOM].set(1)
+            aerofoil = jnp.array(jnp.where(ob_mask == 1))
+
+            velocity_increase = 0.002
+
         elif self.aerofoil_name == "prop":
-            #***********************
-            pass
+            ob_mask = jnp.zeros((N_POINTS_X, N_POINTS_Y))
+            ob_mask = ob_mask.at[PROP_LEFT:PROP_RIGHT, PROP_TOP:PROP_BOTTOM].set(1)
+            aerofoil = jnp.array(jnp.where(ob_mask == 1))
+
+            velocity_increase = 0.0008
+
         else:
             #loading the aerofoil shape from file
             ob_mask = self.load_aerofoil()
@@ -145,7 +176,7 @@ class Calculators(staticmethod):
 
 
 def render(screen, vel_mag, density, vorticity, render_type):
-    global aerofoil_coords, colours, frame_count, render_aerofoil
+    global colours, frame_count, render_aerofoil
     frame_count+=1
     if render_type == "density":
         colours = colours.at[..., 0].set((density[:]/MAX_RENDERED_DENSITY)*255).astype(jnp.uint8)
@@ -161,8 +192,8 @@ def render(screen, vel_mag, density, vorticity, render_type):
 
     #this is causing MASSIVE performance issues. Bigger aerofoil shapes take wayyy longer to render (like quarters frame rate for big ones)
     """
-    if aerofoil_coords != [] and render_aerofoil == True:
-        coords = jnp.array(aerofoil)
+    if aerofoil_coords != jnp.array([]) and render_aerofoil == True:
+        coords = aerofoil.get_coords()
         xs = coords[:, 0]
         ys = coords[:, 1]
         colours = colours.at[xs, ys, :].set((255)).astype(jnp.uint8)
@@ -179,10 +210,8 @@ def render(screen, vel_mag, density, vorticity, render_type):
     return render_type
 
 @jax.jit
-def update(discrete_vels_prev):
-    global aerofoil_coords
-       
-    
+def update(discrete_vels_prev, iteration):
+
     # 1. Apply outflow boundary condition on the right boundary
     discrete_vels_prev = discrete_vels_prev.at[-1, :, LEFT_VELS].set(discrete_vels_prev[-2, :, LEFT_VELS]) #(bounday stuff has same value as stuff one cell further left)
 
@@ -190,36 +219,75 @@ def update(discrete_vels_prev):
     density_prev = Calculators.get_density(discrete_vels_prev)
     macro_vels_prev = Calculators.get_macro_velocities(discrete_vels_prev, density_prev)
     
-    # 3. Apply inflow stuff by Zou/He  (Dirichlet BC)
-    macro_vels_prev = macro_vels_prev.at[0, 1:-1, :].set(velocity_profile[0, 1:-1, :])
+    if aerofoil.get_name() != "jet" and aerofoil.get_name() != "prop":
+        # 3. Apply inflow stuff by Zou/He  (Dirichlet BC)
+        macro_vels_prev = macro_vels_prev.at[0, 1:-1, :].set(velocity_profile[0, 1:-1, :])
+    else:
+        #ensuring the roll function used later does not move velocity from the right to the left
+        macro_vels_prev = macro_vels_prev.at[0, :, :].set(0)
+    
+    # 4. 'anti-roll' so that the top doesnt propogate to the bottom and vice versa
+    macro_vels_prev = macro_vels_prev.at[:, 0, :].set(macro_vels_prev[:, -1, :])
+    macro_vels_prev = macro_vels_prev.at[:, -1, :].set(macro_vels_prev[:, 0, :])
+
     #maths according to Zou/He
     density_prev = density_prev.at[0, :].set((Calculators.get_density(discrete_vels_prev[0, :, VERTICAL_VELS].T) +\
-                                               2 * Calculators.get_density(discrete_vels_prev[0, :, LEFT_VELS].T)) / (1 - macro_vels_prev[0, :, 0]))
-    
-    # 4. calc the discrete equilibria velocities
+                                            2 * Calculators.get_density(discrete_vels_prev[0, :, LEFT_VELS].T)) / (1 - macro_vels_prev[0, :, 0]))
+
+    # 5. calc the discrete equilibria velocities
     equilibrium_discrete_vels = Calculators.get_equilibrium_velocities(macro_vels_prev, density_prev)
     #more Zou/He
     discrete_vels_prev = discrete_vels_prev.at[0, :, RIGHT_VELS].set(equilibrium_discrete_vels[0, :, RIGHT_VELS])
     
-    # 5. BGK collisions
+    # 6. BGK collisions
     # fᵢ ← fᵢ − ω (fᵢ − fᵢᵉ)
     discrete_vels_post_collisions = discrete_vels_prev - RELAXATION_NUMBER * (discrete_vels_prev - equilibrium_discrete_vels)
     discrete_vels_post_bounceback = discrete_vels_post_collisions
-    
-    # 6. bounce-back (for no-slip on interior boundary)
+
+    # 7. bounce-back (for no-slip on interior boundary)
     pre_bounceback_density = Calculators.get_density(discrete_vels_post_collisions)
-    for i in range(N_DISCRETE_VELOCITIES):
-        discrete_vels_post_bounceback = discrete_vels_post_bounceback.at[aerofoil_coords[0, :], \
-                            aerofoil_coords[1, :], LATTICE_INDICES[i]].set(discrete_vels_prev[aerofoil_coords[0, :], aerofoil_coords[1, :], OPPOSITE_LATTICE_INDICES[i]])
+    if aerofoil.get_name() != "jet" and aerofoil.get_name() != "prop":
+        for i in range(N_DISCRETE_VELOCITIES):
+            discrete_vels_post_bounceback = discrete_vels_post_bounceback.at[aerofoil.get_coords()[0, :], aerofoil.get_coords()[1, :], LATTICE_INDICES[i]]\
+                .set(discrete_vels_prev[aerofoil.get_coords()[0, :], aerofoil.get_coords()[1, :], OPPOSITE_LATTICE_INDICES[i]])
+
+    #7.5 adding velocity for thrust sims and top and bottom bounceback walls
+    #only once the inflow has reached propulsion device
+    if (aerofoil.get_name() == "jet" or aerofoil.get_name() == "prop"):
+            #on top and bottom of prop device, solid walls so bounceback
+            if aerofoil.get_name() == "prop":
+                left = PROP_LEFT
+                right = PROP_RIGHT
+                top = PROP_TOP
+                bottom = PROP_BOTTOM
+            else:
+                left = JET_LEFT
+                right = JET_RIGHT
+                top = JET_TOP
+                bottom = JET_BOTTOM
+    
+
+            #propel the fluid which enters, do not propel fluid that is 'already there'
+            discrete_vels_post_bounceback = discrete_vels_post_bounceback.at[aerofoil.get_coords()[0, :], aerofoil.get_coords()[1, :], 1]\
+                .set(discrete_vels_prev[aerofoil.get_coords()[0, :] - 1, aerofoil.get_coords()[1, :], 1] + velocity_increase)
+            # the 1 index is the straight across to the right velocity
+
+            
+            for i in range(N_DISCRETE_VELOCITIES):
+                discrete_vels_post_bounceback = discrete_vels_post_bounceback.at[left:right, top, LATTICE_INDICES[i]]\
+                    .set(discrete_vels_prev[left:right, top, OPPOSITE_LATTICE_INDICES[i]])
+                discrete_vels_post_bounceback = discrete_vels_post_bounceback.at[left:right, bottom, LATTICE_INDICES[i]]\
+                    .set(discrete_vels_prev[left:right, bottom, OPPOSITE_LATTICE_INDICES[i]])
+
+
     post_bounceback_density = Calculators.get_density(discrete_vels_post_bounceback)
     #delta v due to momentum exchange
     delta_vel = discrete_vels_post_bounceback - discrete_vels_post_collisions
     #delta density due to momentum exchange
     delta_density = post_bounceback_density - pre_bounceback_density
-    
-    
-    # 7. streaming along lattice vels
+    # 8. streaming along lattice vels
     discrete_vels_streamed = discrete_vels_post_bounceback
+
     for i in range(N_DISCRETE_VELOCITIES):
         discrete_vels_streamed = discrete_vels_streamed.at[:, :, i].set(
             jnp.roll(
@@ -234,6 +302,9 @@ def LBM_setup(aerofoil_name):
     """
     SETUP
     """
+    global iteration
+    iteration = 0
+
     #velocity profile
     global velocity_profile
     velocity_profile = jnp.zeros((N_POINTS_X, N_POINTS_Y, 2))
@@ -242,14 +313,14 @@ def LBM_setup(aerofoil_name):
     global discrete_vels_prev
     discrete_vels_prev = Calculators.get_equilibrium_velocities(velocity_profile, jnp.ones((N_POINTS_X, N_POINTS_Y)))
     
-    global aerofoil_coords
+    global aerofoil
     aerofoil = Aerofoil(aerofoil_name)
-    aerofoil_coords = aerofoil.get_aerofoil_coords()
 
     #initialises an array which holds RGB val for every pixel in window
     global colours
     colours = jnp.zeros((SCREEN_WIDTH, SCREEN_HEIGHT, 3), dtype=jnp.uint8)
-    
+
+
     #loading settings from file
     setting_tags = ["density", "temperature", "altitude", "sim_width", "inflow_velocity"]
     global setting_values
@@ -262,6 +333,7 @@ def LBM_setup(aerofoil_name):
         average_sim_density = Calculators.get_density(jnp.full((N_POINTS_X, N_POINTS_Y, N_DISCRETE_VELOCITIES),MAX_HORIZONTAL_INFLOW_VEL)).mean()
 
    )
+    
     global delta_x
     delta_x = converters.SI_to_sim_length(float(setting_values[setting_tags.index("sim_width")])) / N_POINTS_X
     print("finished setup")
@@ -269,23 +341,29 @@ def LBM_setup(aerofoil_name):
 
 
 
-def LBM_main_loop(screen, iteration, render_type):
+def LBM_main_loop(screen, render_type, iteration):
     if screen !=None:
         screen.fill("black")
 
     #moving to next time-step
     global discrete_vels_prev, frame_count
-    discrete_vels_next, delta_density, delta_vel = update(discrete_vels_prev)
+    discrete_vels_next, delta_density, delta_vel = update(discrete_vels_prev, iteration)
     
     density = Calculators.get_density(discrete_vels_next)
     #force plotting
-    if iteration % 25 == 0 and iteration > 500:
+    if iteration % 25 == 0 and iteration > 500 and aerofoil.get_name() != "jet" and aerofoil.get_name() != "prop":
         hori_force, vert_force = Calculators.new_force(delta_vel, delta_density)
         hori_force_SI = converters.sim_to_SI_force(hori_force)
         vert_force_SI = converters.sim_to_SI_force(vert_force)
-        print(f"iteration {iteration} - horizontal force: {hori_force_SI}, vertical force: {vert_force_SI}")
+        #print(f"iteration {iteration} - horizontal force: {hori_force_SI}, vertical force: {vert_force_SI}")
         update_graphs(it_count = iteration, lift_item=vert_force_SI, drag_item=hori_force_SI)
-    
+    elif aerofoil.get_name() == "jet" or aerofoil.get_name() == "prop":
+        if iteration % 50 == 0 and iteration > 500:
+            hori_force, vert_force = Calculators.new_force(delta_vel, delta_density)
+            hori_force_SI = converters.sim_to_SI_force(hori_force)
+            vert_force_SI = None
+            #print(f"iteration {iteration} - horizontal thrust: {hori_force_SI}, vertical force: {vert_force_SI}")
+            update_graphs(it_count = iteration, lift_item=vert_force_SI, drag_item=hori_force_SI)
     
     #drawing the simulation
     discrete_vels_prev = discrete_vels_next
@@ -297,4 +375,5 @@ def LBM_main_loop(screen, iteration, render_type):
     render(screen, vel_magnitude, density, curl, render_type)
     
     iteration += 1
+    
     return iteration

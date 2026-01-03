@@ -8,17 +8,16 @@ SCREEN_WIDTH = 600
 SCREEN_HEIGHT = 600
 SIM_WIDTH = 600
 SIM_HEIGHT = 300
-M_ITERATIONS = 1000000
 
 
 #resets variables to go back to the main menu
 def go_to_main_menu():
     running = True
-    iteration = 0
     menu_type = "main_menu"
+    iteration = 0
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     print("back to main menu")
-    return running, iteration, menu_type, screen
+    return running, iteration, menu_type, screen, 
 
 #main loop
 def main(screen):
@@ -26,6 +25,7 @@ def main(screen):
     iteration = 0
     menu_type = "main_menu"
     render_type = "vorticity" #options: "density", "velocity", "vorticity"
+
 
     #instantiating the menus and constructing dictionary
     menus_dict = construct_menus(screen, big_font, menu_font, small_font)
@@ -38,13 +38,18 @@ def main(screen):
         "draw": p_main
     }
     DISPLAYS = menus_dict | sims_dict | draw_dict
-        
+    
     
     while running:
+        clock.tick(60)
         #if fluid sim is running
         if menu_type in sims_dict:
-            iteration = DISPLAYS[menu_type](screen, iteration, render_type)
-        
+            iteration =DISPLAYS[menu_type](screen, render_type, iteration)
+            framerate = clock.get_fps()
+            fps_text = small_font.render(f"FPS={int(framerate)}", True, (255, 255, 255))
+            screen.blit(fps_text, (10, 10))
+            pygame.display.update()
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -67,11 +72,13 @@ def main(screen):
             if menu_type == "draw":
                 DISPLAYS[menu_type](screen, event, menu_font)
 
+
                 
             elif menu_type in menus_dict:
+                screen.fill((0,0,0))
                 menu_type, screen = DISPLAYS[menu_type].controller(event, )
                 #if aerofoil name is returned
-                if menu_type not in DISPLAYS:
+                if menu_type not in DISPLAYS or menu_type in sims_dict:
                     aerofoil_name = menu_type
                     menu_type = 'sim'
                     screen = pygame.display.set_mode((SIM_WIDTH, SIM_HEIGHT))

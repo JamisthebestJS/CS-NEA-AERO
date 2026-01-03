@@ -28,7 +28,7 @@ def construct_menus(screen, big_font, med_font, small_font):
     
     #propulsion type menu
     branches = ["prop", "jet"]
-    btn_texts = []
+    btn_texts = ["Propeller", "Jet Engine"]
     menu_type = "prop_or_jet"
     prop_or_jet_menu = MiscMenu(screen, big_font, med_font, menu_type, btn_texts, branches = branches, title = "Thrust Simulations", )
     
@@ -77,7 +77,11 @@ class Menu(object):
         self.width, self.height = screen.get_size()
     
     def render(self, ):
-        print("no render method programmed")
+        font = self.font
+        title_text = pygame.font.render(f"{self.type}", True, (255, 255, 255))
+        title_width, title_height = font.size(f"{self.type}")
+        self.screen.blit(title_text, ((self.width - title_width)/2, (FRACTION*self.height - title_height/2)))
+
         pygame.display.flip()
         return self.screen
 
@@ -173,7 +177,8 @@ class SettingsMenu(Menu):
                 print("val str", str(self.button_inputs[index]))
                 if validation_dict[self.setting_tags[index]](str(self.button_inputs[index])) == True:
                     self.active_inputs[index] = False
-                    save_settings(self.setting_tags, str(self.button_inputs))
+                    print("btn ins", self.button_inputs)
+                    save_settings(self.setting_tags, self.button_inputs)
                 else:
                     print("invalid input for ", self.setting_tags[index])
                     self.error_type = "invalidInput"
@@ -194,9 +199,9 @@ class SettingsMenu(Menu):
                         if self.button_inputs[self.setting_tags.index("density")] != "" and index != self.setting_tags.index("temperature")\
                             and index != self.setting_tags.index("altitude"):
                             density = self.button_inputs[self.setting_tags.index("density")]
-                            self.button_inputs[self.setting_tags.index("temperature")] = VariableCalculators.calculate_temperature(density=float(density))
+                            self.button_inputs[self.setting_tags.index("temperature")] = VariableCalculators.calculate_temperature(float(density))
                             if float(density) > 0.75:
-                                altitude = "0"
+                                altitude = "0.1"
                             else:
                                 altitude = "12200"
                             self.button_inputs[self.setting_tags.index("altitude")] = altitude
@@ -228,8 +233,6 @@ class SettingsMenu(Menu):
         return str(self.type), self.screen
 
 
-
-#TITLES NEED DOING STILL AS IN RENDERING THEM******
 class ListMenu(Menu):
     def __init__(self, screen, font, font2, type, vis_size):
         super().__init__(screen, font, font2, type, )
@@ -308,8 +311,11 @@ class MiscMenu(Menu):
     def render(self, ):
         width = self.width
         height = self.height
-        #need to do title still
-        
+        font = self.font
+        title_text = font.render(f"{self.title}", True, (255, 255, 255))
+        title_width, title_height = font.size(f"{self.title}")
+        self.screen.blit(title_text, ((width - title_width)/2, FRACTION*height - title_height/2))
+
         #renders buttons with button text
         for i in range(self.btn_count):
             pygame.draw.rect(self.screen, BTN_COLOUR, (self.hoz_pad, (3+2*i)*FRACTION*height, (width-2*self.hoz_pad), self.btn_height))

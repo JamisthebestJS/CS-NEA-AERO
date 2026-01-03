@@ -5,9 +5,9 @@ from helpers.aerofoil_save_funcs import save_menu
 
 
 
-SCREEN_SIZE = 700
-#pythag shows cat_rom_def should be sqrt(2)*side_length which is what is done below
-CAT_ROM_DEF =  int(1.41*(SCREEN_SIZE))#number of points between each pair of vertices in catmull rom spline (wants to be num of pixels diagonally)
+SCREEN_SIZE = 600
+#pythag shows CAT_ROM_DEFINITION should be sqrt(2)*side_length which is what is done below
+CAT_ROM_DEFINITION =  int(1.41*(SCREEN_SIZE))#number of points between each pair of vertices in catmull rom spline (wants to be num of pixels diagonally)
 
 SIM_HEIGHT = 300
 MAX_VERTEX_COUNT = 30
@@ -42,14 +42,14 @@ class CatmullRom(object):
             p1 = self.__control_points[i]
             p2 = self.__control_points[i + 1]
             p3 = self.__control_points[i + 2] if i + 2 < n else self.__control_points[i + 1]
-            for j in range(CAT_ROM_DEF):
-                t = j / CAT_ROM_DEF
-                self.__path.at[self.get_path_length()-1].set(self.catmull_rom_point_calc(p0, p1, p2, p3, t))
+            for j in range(CAT_ROM_DEFINITION):
+                t = j / CAT_ROM_DEFINITION
+                self.__path.append(self.catmull_rom_point_calc(p0, p1, p2, p3, t))
             
         #trying to get first to join to last point
-        for j in range(CAT_ROM_DEF):
-            t = j / CAT_ROM_DEF
-            self.__path.at[self.get_path_length()-1].set(self.catmull_rom_point_calc(self.__control_points[-2], self.__control_points[-1], self.__control_points[0], self.__control_points[1], t))
+        for j in range(CAT_ROM_DEFINITION):
+            t = j / CAT_ROM_DEFINITION
+            self.__path.append(self.catmull_rom_point_calc(self.__control_points[-2], self.__control_points[-1], self.__control_points[0], self.__control_points[1], t))
     
     def render_path(self, screen):
         for point in self.__path:
@@ -82,15 +82,8 @@ class CatmullRom(object):
     def clear_path(self):
         self.__path = []
         self.__control_points = []
-    
-    def get_path_length(self):
-        count = 0
-        for i in self.__path:
-            if self.__path[i] != [0, 0]:
-                count+=1
-        return count
 
-spline = CatmullRom(control_points = [], path = jnp.zeros((MAX_VERTEX_COUNT, 2)))
+spline = CatmullRom(control_points = [], path = [])
 
 
 class Modes(staticmethod):
@@ -111,7 +104,7 @@ class Modes(staticmethod):
                 Vertex(position)
                 spline.new_point(position)
             else:
-                print(f"vertex out of bounds at {(x, y)}")
+                print(f"vertex out of bounds at {position}")
         else:
             print(f"reached limit of {MAX_VERTEX_COUNT}")
 
@@ -162,18 +155,18 @@ class Modes(staticmethod):
         
         object_mask = jnp.zeros((SIM_HEIGHT, SIM_HEIGHT))
         for i in save_path:
-            object_mask[i[1], i[0]] = True #aerofoil needs to be rotated because of the way saving works, each file row is each aerofoil column, but reading, it is 'correct
+            object_mask.at[i[1], i[0]].set(True) #aerofoil needs to be rotated because of the way saving works, each file row is each aerofoil column, but reading, it is 'correct
         
         x, y = Toolbox.find_flood_start(save_path)
         print("flood start", x, y)
-        object_mask = Toolbox.flood_fill(x, y, object_mask, 1, Queue())
+        aerofoil_mask = Toolbox.flood_fill(x, y, object_mask, 1, Queue())
         
         #small error check - if has filled all 4 corners, likely picked wrong spot for flood fill start - NOT el-wise ob_mask
-        print("corner vals:", object_mask[0,0], object_mask[0,-1], object_mask[-1,0], object_mask[-1,-1])
-        if object_mask[0,0] == 1 and object_mask[0,-1] == 1 and object_mask[-1, 0] == 1 and object_mask[-1,-1] == 1:
-            object_mask = jnp.logical_not(object_mask)
+        print("corner vals:", aerofoil_mask[0,0], aerofoil_mask[0,-1], aerofoil_mask[-1,0], aerofoil_mask[-1,-1])
+        if aerofoil_mask[0,0] == 1 and aerofoil_mask[0,-1] == 1 and aerofoil_mask[-1, 0] == 1 and aerofoil_mask[-1,-1] == 1:
+            aerofoil_mask = jnp.logical_not(aerofoil_mask)
         
-        save_menu(object_mask, screen, font)
+        save_menu(aerofoil_mask, screen, font)
         
     @staticmethod
     def set_mode(new_mode):
@@ -193,19 +186,19 @@ class Toolbox(staticmethod):
         return (snapped_x, snapped_y)
     
     @staticmethod 
-    def flood_fill(x, y, image, new_colour, queue):
-        old_colour = image[x, y]
-        print("old colour", old_colour)
-        
+    def flood_fill(x, y, array, new_colour, queue):
+        array = array.tolist()
+
+        old_colour = array[x][y]
         if old_colour == new_colour:
-            return image
+            return array
         
         queue.enqueue((x, y))
         directions = [(1,0), (-1,0), (0,1), (0,-1)]
-        image[x, y] = new_colour
+        array[x][y] = new_colour
         
         queue_count = 0
-        print(f"im width ={len(image)}, im hieght={len(image[0])}")
+        print(f"im width ={len(array)}, im height={len(array[0])}")
         
         while queue.is_empty() == False:
             x, y = queue.dequeue()
@@ -215,13 +208,14 @@ class Toolbox(staticmethod):
                 new_x = x+dx
                 new_y = y+dy
                 
-                if 0 <= new_x < len(image) and 0 <= new_y < len(image[0]) and image[new_x, new_y] == old_colour:
-                    image[new_x, new_y] = new_colour
-                    queue.enqueue((new_x, new_y))
+                if 0 <= new_x < SIM_HEIGHT and 0 <= new_y < SIM_HEIGHT:
+                    if array[new_x][new_y] == old_colour:
+                        array[new_x][new_y] = new_colour
+                        queue.enqueue((new_x, new_y))
         
         print("flood-fill finished after filling", queue_count, "nodes")
         
-        return image
+        return jnp.array(array)
     
     @staticmethod
     def find_flood_start(save_path):
@@ -251,7 +245,7 @@ class Toolbox(staticmethod):
         normal_vector = (-vector[1], vector[0])
         
         #5.
-        card_dir_vec = (round(Toolbox.clamp(normal_vector[0], -1, 1)), round(Toolbox.clamp(normal_vector[1], -1, 1)))
+        card_dir_vec = (round(Toolbox.clamp(normal_vector[0], -1, 1)), round(Toolbox.clamp(normal_vector[1], 0, 1)))
         print("card dir vec", card_dir_vec)
         print("loweest", lowest)
         
@@ -363,13 +357,10 @@ dragged_vertex_ID = None
 def p_main(screen, event, font):
     global dragging, drag_start_position, drag_end_position, dragged_vertex_ID
     #so can quit while drawing
-    running = True
     if event.type == pygame.QUIT:
-        running = False
         pygame.quit()
     
     mode = Modes.get_mode()
-    
     
     #CHANGING MODES
     if event.type == pygame.KEYDOWN:
@@ -388,7 +379,7 @@ def p_main(screen, event, font):
                 Modes.set_mode("save")
             
             #debug
-            if Modes.get_mode != old_mode:
+            if mode != old_mode:
                 print(f"Mode set to {Modes.get_mode()}")
 
     #IF MOUSE CLICK
@@ -428,7 +419,7 @@ def p_main(screen, event, font):
                 
             dragged_vertex_ID = 0
             dragging = False
-                
+    
     screen.fill((0, 0, 0, 0))
     spline.render_path(screen)
     VertexListOperations.render_all_vertices(screen)
@@ -436,21 +427,3 @@ def p_main(screen, event, font):
 
     return "draw"
 
-
-"""
-TODO:
-- GUI stuff. Buttons for modes, maybe a sidebar for info
-(smaller things)
-- dont allow to place a vertex on top of another vertex (or too close)
-
-ERRORS (causes crash):
--
-
-BUG:
-- saving the aerofoil for some reason visually shrinks it to simualation size, which shouldnt happen
-    I am really lost as to why. Does NOT seem like it should do that at all
-
-
-
-
-"""
