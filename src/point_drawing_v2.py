@@ -133,7 +133,7 @@ class Modes(staticmethod):
     def save_to_file(screen, font):        
         #so saving doesnt affect rendered shape
         raw_path = spline.get_path()
-        save_path = [ [float(p[0]), float(p[1])] if not isinstance(p, (list, tuple)) else [p[0], p[1]] for p in raw_path ]
+        save_path = [[float(p[0]), float(p[1])] for p in raw_path]
         #discretisation and resizing to fit simulation size
         for i in save_path:
             i[0] = int(i[0]//(SCREEN_SIZE/SIM_HEIGHT))
