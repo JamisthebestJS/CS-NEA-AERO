@@ -1,7 +1,7 @@
 #LBM_main_menu
 import pygame
 import os
-from helpers.sort import insertion_sort
+from helpers.sort import aerofoil_sort
 from helpers.validation import validation_dict
 from helpers.saving_settings import save_settings, load_settings
 from helpers.variable_calc import VariableCalculators
@@ -172,12 +172,10 @@ class SettingsMenu(Menu):
                     self.button_inputs[index] = ""
             
             elif event.key == pygame.K_RETURN:
-                print("attempting to save setting")
                 #validating input then saving to file
-                print("val str", str(self.button_inputs[index]))
+                print("validating string", str(self.button_inputs[index]))
                 if validation_dict[self.setting_tags[index]](str(self.button_inputs[index])) == True:
                     self.active_inputs[index] = False
-                    print("btn ins", self.button_inputs)
                     save_settings(self.setting_tags, self.button_inputs)
                 else:
                     print("invalid input for ", self.setting_tags[index])
@@ -274,7 +272,7 @@ class ListMenu(Menu):
             elif event.button == 1:
                 item = None
                 mouse_x, mouse_y = pygame.mouse.get_pos()
-                index = (mouse_y - self.scroll_y)//self.item_height
+                index = int((mouse_y - self.scroll_y - self.screen.get_height()/9)//self.item_height) #put "- self.screen.get_height()/9" after "self.scroll_y"
                 if 0 <= index < len(items) and 50 <= mouse_x <= self.screen.get_width() - 100:
                     print(f"Aerofoil {items[index]} selected")
                     item = items[index]
@@ -286,7 +284,7 @@ class ListMenu(Menu):
         # Filter only files and then sort numerically
         aerofoils_list = [f for f in files if os.path.isfile(os.path.join(self.directory, f))]
         if aerofoils_list != None:
-            items = insertion_sort(aerofoils_list)
+            items = aerofoil_sort(aerofoils_list)
             list_height = len(items) * self.item_height
             menu_type = self.do_input(event, items, list_height)
             self.screen = self.render(items, )

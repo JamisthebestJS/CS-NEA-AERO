@@ -95,3 +95,21 @@ There seems to be an issue with the propeller simulation. At around 7000 iterati
 #### late simulation curl plot
 <img width="1401" height="687" alt="image" src="https://github.com/user-attachments/assets/b2738ac6-efac-4e94-a5b8-b77d7266b946" />
 
+## Notes on JAX (optional) 🔧
+If you need to use JAX on Windows, use the conda environment `jaxenv`. JAX includes native C/C++ binaries (DLLs) that often require bundled runtime libraries; installing via `conda` from `conda-forge` typically avoids DLL initialization issues on Windows.
+
+Quick commands:
+
+```bash
+# install Miniconda (if needed) - https://docs.conda.io/en/latest/miniconda.html
+conda create -n jaxenv python=3.10 -y
+conda activate jaxenv
+conda install -n jaxenv -c conda-forge jax jaxlib python=3.10 -y
+```
+
+I removed `jax`/`jaxlib` from the project virtualenv (`aeroenv`) to avoid conflicts on Windows. If you ever want to reinstall into the venv (not recommended on Windows), run:
+
+```bash
+C:\Users\jamie\Documents\GitHub\CS-NEA-AERO\aeroenv\Scripts\python.exe -m pip uninstall -y jax jaxlib
+```
+

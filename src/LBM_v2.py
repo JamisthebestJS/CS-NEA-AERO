@@ -54,15 +54,15 @@ VERTICAL_VELS = jnp.array([0, 2, 4])
 HORIZONTAL_VELS = jnp.array([0, 1, 3])
 
 #propulsion device size parameters
-JET_TOP = SCREEN_HEIGHT//3
-JET_BOTTOM = 2*SCREEN_HEIGHT//3
-JET_LEFT = SCREEN_WIDTH//3
-JET_RIGHT = JET_LEFT + SCREEN_WIDTH//3
+JET_TOP = 2*SCREEN_HEIGHT//6 + SCREEN_HEIGHT//16
+JET_BOTTOM = 4*SCREEN_HEIGHT//6 - SCREEN_HEIGHT//16
+JET_LEFT = 2*SCREEN_WIDTH//8
+JET_RIGHT = JET_LEFT + 3*SCREEN_WIDTH//8 - SCREEN_WIDTH//16
 
-PROP_TOP = SCREEN_HEIGHT//5
-PROP_BOTTOM = 4*SCREEN_HEIGHT//5
-PROP_LEFT = SCREEN_WIDTH//3
-PROP_RIGHT = PROP_LEFT + SCREEN_WIDTH//5
+PROP_TOP = SCREEN_HEIGHT//4 + SCREEN_HEIGHT//16
+PROP_BOTTOM = 3*SCREEN_HEIGHT//4 - SCREEN_HEIGHT//16
+PROP_LEFT = 2*SCREEN_WIDTH//8
+PROP_RIGHT = PROP_LEFT + SCREEN_WIDTH//8 - SCREEN_WIDTH//16
 
 
 
@@ -163,41 +163,36 @@ class Calculators(staticmethod):
             )
         return equilibrium_discrete_vels
     
-    @jax.jit
-    def new_force(delta_vel, delta_density):
-        #should probably be done better since diving by density then multiplying
-        momentum_density = jnp.einsum('NMQ,dQ->NMd', delta_vel, LATTICE_VELS)
-        
-        delta_x_momentum = jnp.sum(momentum_density[:, :, 0]*delta_density*delta_x**3)
-        delta_y_momentum = jnp.sum(momentum_density[:, :, 1]*delta_density*delta_x**3)
+    #@jax.jit
+    def force_calc(delta_vel, delta_density):
+        momentum_density = jnp.einsum('dQ,NMQ->NMd', LATTICE_VELS, delta_vel)
+        aerofoil_coords = aerofoil.get_coords()
+        aerofoil_x_coords = aerofoil_coords[0]
+        aerofoil_y_coords = aerofoil_coords[1]
         #force = delta_momentum / 1 (as across 1 timestep)
-        return delta_x_momentum, delta_y_momentum
+
+        delta_momentum = jnp.sum(momentum_density[aerofoil_x_coords, aerofoil_y_coords, :], axis = 0)
+        #ignore density as its always 1 and no change of area of aerofoil => no change in mass.
+        return delta_momentum[0]*delta_x**3, delta_momentum[1]*delta_x**3
 
 
 
 def render(screen, vel_mag, density, vorticity, render_type):
     global colours, frame_count, render_aerofoil
     frame_count+=1
+    #sets colours of each grid cell (=pixel) then blits them onto the screen
     if render_type == "density":
-        colours = colours.at[..., 0].set((density[:]/MAX_RENDERED_DENSITY)*255).astype(jnp.uint8)
-        colours = colours.at[..., 1].set(0)
+        colours = colours.at[..., 0].set(jnp.clip((density[:]/MAX_RENDERED_DENSITY)*255).astype(jnp.uint8))
+        colours = colours.at[..., 1].set(jnp.asarray(0, dtype=jnp.uint8))
         
     elif render_type == "velocity":
-        colours = colours.at[..., 0].set((vel_mag[:]/MAX_RENDERED_VAL)*255).astype(jnp.uint8)
-        colours = colours.at[..., 1].set(0)
-        
-    elif render_type == "vorticity":
-        colours = colours.at[..., 0].set((vorticity[:]/MAX_RENDERED_VORT)*255).astype(jnp.uint8)
-        colours = colours.at[..., 1].set((-vorticity[:]/MAX_RENDERED_VORT)*255).astype(jnp.uint8)
+        colours = colours.at[..., 0].set(jnp.clip(((vel_mag[:]/MAX_RENDERED_VAL)*255), 0, 255).astype(jnp.uint8))
+        colours = colours.at[..., 1].set(jnp.asarray(0, dtype=jnp.uint8))
 
-    #this is causing MASSIVE performance issues. Bigger aerofoil shapes take wayyy longer to render (like quarters frame rate for big ones)
-    """
-    if aerofoil_coords != jnp.array([]) and render_aerofoil == True:
-        coords = aerofoil.get_coords()
-        xs = coords[:, 0]
-        ys = coords[:, 1]
-        colours = colours.at[xs, ys, :].set((255)).astype(jnp.uint8)
-    """
+    elif render_type == "vorticity":
+        colours = colours.at[..., 0].set(jnp.clip(((vorticity[:]/MAX_RENDERED_VORT)*255), 0, 255).astype(jnp.uint8))
+        colours = colours.at[..., 1].set(jnp.clip(((-vorticity[:]/MAX_RENDERED_VORT)*255), 0, 255).astype(jnp.uint8))
+
     surface = pygame.surfarray.make_surface(colours)
     #surf = pygame.transform.scale(surf, (width, height))
     screen.blit(surface, (0,0))
@@ -330,7 +325,8 @@ def LBM_setup(aerofoil_name):
     converters = Conversions(
         SI_velocity = float(setting_values[setting_tags.index("inflow_velocity")]),
         SI_density = float(setting_values[setting_tags.index("density")]),
-        average_sim_density = Calculators.get_density(jnp.full((N_POINTS_X, N_POINTS_Y, N_DISCRETE_VELOCITIES),MAX_HORIZONTAL_INFLOW_VEL)).mean()
+        average_sim_density = 1,
+        SI_length= float(setting_values[setting_tags.index("sim_width")]),
 
    )
     
@@ -352,17 +348,17 @@ def LBM_main_loop(screen, render_type, iteration):
     density = Calculators.get_density(discrete_vels_next)
     #force plotting
     if iteration % 25 == 0 and iteration > 500 and aerofoil.get_name() != "jet" and aerofoil.get_name() != "prop":
-        hori_force, vert_force = Calculators.new_force(delta_vel, delta_density)
+        vert_force, hori_force = Calculators.force_calc(delta_vel, delta_density)
         hori_force_SI = converters.sim_to_SI_force(hori_force)
-        vert_force_SI = converters.sim_to_SI_force(vert_force)
-        #print(f"iteration {iteration} - horizontal force: {hori_force_SI}, vertical force: {vert_force_SI}")
+        vert_force_SI = - converters.sim_to_SI_force(vert_force)
+        print(f"iteration {iteration} - horizontal force: {hori_force_SI}, vertical force: {vert_force_SI}")
         update_graphs(it_count = iteration, lift_item=vert_force_SI, drag_item=hori_force_SI)
     elif aerofoil.get_name() == "jet" or aerofoil.get_name() == "prop":
         if iteration % 50 == 0 and iteration > 500:
-            hori_force, vert_force = Calculators.new_force(delta_vel, delta_density)
+            hori_force, vert_force = Calculators.force_calc(delta_vel, delta_density)
             hori_force_SI = converters.sim_to_SI_force(hori_force)
             vert_force_SI = None
-            #print(f"iteration {iteration} - horizontal thrust: {hori_force_SI}, vertical force: {vert_force_SI}")
+            print(f"iteration {iteration} - horizontal thrust: {hori_force_SI}, vertical force: {vert_force_SI}")
             update_graphs(it_count = iteration, lift_item=vert_force_SI, drag_item=hori_force_SI)
     
     #drawing the simulation

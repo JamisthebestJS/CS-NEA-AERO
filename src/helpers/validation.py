@@ -2,8 +2,8 @@ import re
 density_validation = r"^(0?\.(?!0+$)\d{1,5}|1(\.\d{1,5})?|2(\.0{1,5})?)$"
 temperature_validation = r"^-?[0-5]\d?(\.\d{1,5})?$"
 altitude_validation = r"^(1|2)?\d{0,4}(\.\d{1,5})?$"
-sim_width_validation = r"^0?\.(?!0+$)\d{0,5}|(1|2)?\d(\.\d{1,5})?|3\d(\.\d{1,5})?$"
-inflow_velocity_validation = r"^0?\.(?!0+$)\d{1,5}|1?\d{1,2}(\.\d{1,5})?|2[0-4]\d(\.\d{1,5})?$"
+sim_width_validation = r"^(0?\.(?!0+$)\d{0,5}|(1|2)?\d(\.\d{1,5})?|3\d(\.\d{1,5})?)$"
+inflow_velocity_validation = r"^(0?\.(?!0+$)\d{1,5}|1?\d{1,2}(\.\d{1,5})?|2[0-4]\d(\.\d{1,5})?)$"
 
 
 
@@ -30,10 +30,20 @@ class Validators(object):
 
     def validate_sim_width(self, input):
         search = re.fullmatch(self.sim_width_regex, input)
+        try:
+            if int(input) == 0:
+                return False
+        except:
+            return False
         return search is not None and input != ""
 
     def validate_inflow_velocity(self, input):
         search = re.fullmatch(self.inflow_velocity_regex, input)
+        try:
+            if int(input) == 0:
+                return False
+        except:
+            return False
         return search is not None and input is not ""
 
 validators = Validators(density_validation, temperature_validation, altitude_validation, sim_width_validation, inflow_velocity_validation)

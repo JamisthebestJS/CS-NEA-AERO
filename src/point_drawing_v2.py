@@ -132,30 +132,18 @@ class Modes(staticmethod):
     @staticmethod
     def save_to_file(screen, font):        
         #so saving doesnt affect rendered shape
-        raw_path = spline.get_path()
+        raw_path = spline.get_path()    
         save_path = [ [float(p[0]), float(p[1])] if not isinstance(p, (list, tuple)) else [p[0], p[1]] for p in raw_path ]
         #discretisation and resizing to fit simulation size
         for i in save_path:
             i[0] = int(i[0]//(SCREEN_SIZE/SIM_HEIGHT))
             i[1] = int(i[1]//(SCREEN_SIZE/SIM_HEIGHT))
-        
-        #removes duplicates
-        new = []
-        seen_keys = set()
-        for sublist in save_path:
-            sub = tuple(sublist)
-            key = sub
-            if key not in seen_keys:
-                seen_keys.add(key)
-                new.append(sub)
-        #here the save_path is a list of the minimal number of unique coordinates that still fully defines the boundary of the aerofoil
-        save_path = new
-        
+
         #make a true/false mask of outline
         
         object_mask = jnp.zeros((SIM_HEIGHT, SIM_HEIGHT))
         for i in save_path:
-            object_mask.at[i[1], i[0]].set(True) #aerofoil needs to be rotated because of the way saving works, each file row is each aerofoil column, but reading, it is 'correct
+            object_mask = object_mask.at[i[1], i[0]].set(True) #aerofoil needs to be rotated because of the way saving works, each file row is each aerofoil column, but reading, it is 'correct
         
         x, y = Toolbox.find_flood_start(save_path)
         print("flood start", x, y)
@@ -198,7 +186,6 @@ class Toolbox(staticmethod):
         array[x][y] = new_colour
         
         queue_count = 0
-        print(f"im width ={len(array)}, im height={len(array[0])}")
         
         while queue.is_empty() == False:
             x, y = queue.dequeue()
@@ -286,7 +273,6 @@ class VertexListOperations(object):
     
     @staticmethod
     def get_vertices_list_length():
-        print(VertexListOperations.vertices)
         return len(VertexListOperations.vertices)
     
     @staticmethod

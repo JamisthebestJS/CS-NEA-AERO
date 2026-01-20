@@ -18,7 +18,6 @@ def save_settings(setting_tags, setting_values, directory = DIR):
             if tag in line:
                 all_content[j] = f"{tag} = {str(setting_values[setting_tags.index(tag)])}\n" 
         
-    print("2",all_content)
     with open(directory, "w") as file:
         for line in all_content:
             file.write(line)
