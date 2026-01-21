@@ -46,3 +46,4 @@ def clear_graph():
     lift_list = []
     iteration_list = []
     graph = None
+    plt.close()

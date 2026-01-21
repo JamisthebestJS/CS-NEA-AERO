@@ -2,9 +2,10 @@ import pygame
 from pathlib import Path
 import jax.numpy as jnp
 import jax
-from helpers.graphs import update_graphs
+from helpers.graphs import update_graphs, clear_graph
 from helpers.saving_settings import load_settings
 from helpers.unit_conversions import Conversions
+
 
 render_aerofoil = False
 
@@ -75,6 +76,7 @@ class Aerofoil(object):
     def __init__(self, aerofoil_name):
         self.aerofoil_name = aerofoil_name
         self.aerofoil_coords = self.get_aerofoil_coords()
+        print(self.aerofoil_coords[1, 20:30], "aerofoil y coord sample to test")
     
     def load_aerofoil(self, ):
         mask = jnp.zeros((N_POINTS_X, N_POINTS_Y))
@@ -204,8 +206,7 @@ def render(screen, vel_mag, density, vorticity, render_type):
     pygame.display.flip()
     return render_type
 
-@jax.jit
-def update(discrete_vels_prev, iteration):
+def update(discrete_vels_prev, aerofoil_name, aerofoil_coords):
 
     # 1. Apply outflow boundary condition on the right boundary
     discrete_vels_prev = discrete_vels_prev.at[-1, :, LEFT_VELS].set(discrete_vels_prev[-2, :, LEFT_VELS]) #(bounday stuff has same value as stuff one cell further left)
@@ -214,7 +215,7 @@ def update(discrete_vels_prev, iteration):
     density_prev = Calculators.get_density(discrete_vels_prev)
     macro_vels_prev = Calculators.get_macro_velocities(discrete_vels_prev, density_prev)
     
-    if aerofoil.get_name() != "jet" and aerofoil.get_name() != "prop":
+    if aerofoil_name != "jet" and aerofoil_name != "prop":
         # 3. Apply inflow stuff by Zou/He  (Dirichlet BC)
         macro_vels_prev = macro_vels_prev.at[0, 1:-1, :].set(velocity_profile[0, 1:-1, :])
     else:
@@ -241,16 +242,16 @@ def update(discrete_vels_prev, iteration):
 
     # 7. bounce-back (for no-slip on interior boundary)
     pre_bounceback_density = Calculators.get_density(discrete_vels_post_collisions)
-    if aerofoil.get_name() != "jet" and aerofoil.get_name() != "prop":
+    if aerofoil_name != "jet" and aerofoil_name != "prop":
         for i in range(N_DISCRETE_VELOCITIES):
-            discrete_vels_post_bounceback = discrete_vels_post_bounceback.at[aerofoil.get_coords()[0, :], aerofoil.get_coords()[1, :], LATTICE_INDICES[i]]\
-                .set(discrete_vels_prev[aerofoil.get_coords()[0, :], aerofoil.get_coords()[1, :], OPPOSITE_LATTICE_INDICES[i]])
+            discrete_vels_post_bounceback = discrete_vels_post_bounceback.at[aerofoil_coords[0, :], aerofoil_coords[1, :], LATTICE_INDICES[i]]\
+                .set(discrete_vels_prev[aerofoil_coords[0, :], aerofoil_coords[1, :], OPPOSITE_LATTICE_INDICES[i]])
 
     #7.5 adding velocity for thrust sims and top and bottom bounceback walls
     #only once the inflow has reached propulsion device
-    if (aerofoil.get_name() == "jet" or aerofoil.get_name() == "prop"):
+    if (aerofoil_name == "jet" or aerofoil_name == "prop"):
             #on top and bottom of prop device, solid walls so bounceback
-            if aerofoil.get_name() == "prop":
+            if aerofoil_name == "prop":
                 left = PROP_LEFT
                 right = PROP_RIGHT
                 top = PROP_TOP
@@ -263,8 +264,8 @@ def update(discrete_vels_prev, iteration):
     
 
             #propel the fluid which enters, do not propel fluid that is 'already there'
-            discrete_vels_post_bounceback = discrete_vels_post_bounceback.at[aerofoil.get_coords()[0, :], aerofoil.get_coords()[1, :], 1]\
-                .set(discrete_vels_prev[aerofoil.get_coords()[0, :] - 1, aerofoil.get_coords()[1, :], 1] + velocity_increase)
+            discrete_vels_post_bounceback = discrete_vels_post_bounceback.at[aerofoil_coords[0, :], aerofoil_coords[1, :], 1]\
+                .set(discrete_vels_prev[aerofoil_coords[0, :] - 1, aerofoil_coords[1, :], 1] + velocity_increase)
             # the 1 index is the straight across to the right velocity
 
             
@@ -297,6 +298,7 @@ def LBM_setup(aerofoil_name):
     """
     SETUP
     """
+
     global iteration
     iteration = 0
 
@@ -332,6 +334,10 @@ def LBM_setup(aerofoil_name):
     
     global delta_x
     delta_x = converters.SI_to_sim_length(float(setting_values[setting_tags.index("sim_width")])) / N_POINTS_X
+
+    global update_jit
+    update_jit = jax.jit(update, static_argnames=["aerofoil_name"])
+
     print("finished setup")
     return True
 
@@ -342,8 +348,8 @@ def LBM_main_loop(screen, render_type, iteration):
         screen.fill("black")
 
     #moving to next time-step
-    global discrete_vels_prev, frame_count
-    discrete_vels_next, delta_density, delta_vel = update(discrete_vels_prev, iteration)
+    global discrete_vels_prev, frame_count, aerofoil
+    discrete_vels_next, delta_density, delta_vel = update_jit(discrete_vels_prev, aerofoil.get_name(), aerofoil.get_coords())
     
     density = Calculators.get_density(discrete_vels_next)
     #force plotting
@@ -373,3 +379,19 @@ def LBM_main_loop(screen, render_type, iteration):
     iteration += 1
     
     return iteration
+
+
+def stop_simulation():
+    global frame_count, aerofoil, discrete_vels_prev, colours, velocity_profile, converters, setting_values, iteration, update_jit, velocity_increase, update_jit
+    frame_count = 0
+    iteration = 0
+    velocity_increase = 0
+    clear_graph()
+    del(aerofoil)
+    del(discrete_vels_prev)
+    del(colours)
+    del(velocity_profile)
+    del(converters)
+    del(setting_values)
+    update_jit = None
+    return True

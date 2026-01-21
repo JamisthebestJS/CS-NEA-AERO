@@ -272,7 +272,7 @@ class ListMenu(Menu):
             elif event.button == 1:
                 item = None
                 mouse_x, mouse_y = pygame.mouse.get_pos()
-                index = int((mouse_y - self.scroll_y - self.screen.get_height()/9)//self.item_height) #put "- self.screen.get_height()/9" after "self.scroll_y"
+                index = int((mouse_y - self.scroll_y - self.screen.get_height()/9)//self.item_height)
                 if 0 <= index < len(items) and 50 <= mouse_x <= self.screen.get_width() - 100:
                     print(f"Aerofoil {items[index]} selected")
                     item = items[index]

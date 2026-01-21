@@ -1,6 +1,6 @@
 import pygame
 from point_drawing_v2 import p_main
-from LBM_v2 import LBM_setup, LBM_main_loop
+from LBM_v2 import LBM_setup, LBM_main_loop, stop_simulation
 from helpers.menus import construct_menus
 
  
@@ -16,6 +16,7 @@ def go_to_main_menu():
     menu_type = "main_menu"
     iteration = 0
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    stop_simulation()
     print("back to main menu")
     return running, iteration, menu_type, screen, 
 
@@ -72,10 +73,9 @@ def main(screen):
             if menu_type == "draw":
                 DISPLAYS[menu_type](screen, event, menu_font)
 
-
                 
             elif menu_type in menus_dict:
-                screen.fill((0,0,0))
+                screen.fill((0,0,0))    
                 menu_type, screen = DISPLAYS[menu_type].controller(event, )
                 #if aerofoil name is returned
                 if menu_type not in DISPLAYS or menu_type in sims_dict:
@@ -97,3 +97,8 @@ pygame.font.init()
 #driver code
 if __name__ == "__main__":
     main(screen)
+
+
+
+#remember to update code in writeup appendices
+#and un-update code not in appendices
